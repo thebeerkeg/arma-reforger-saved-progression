@@ -1,0 +1,25 @@
+# TBK Progression Bridge configuration
+# Place this file next to the executable, or pass --config <path>
+
+[server]
+# Bind to localhost only by default. Change to "0.0.0.0" only if you know what
+# you're doing and have firewall rules in place.
+bind_address = "127.0.0.1:8787"
+
+# Shared secret. The Reforger addon must send this in the X-Api-Key header.
+# CHANGE THIS to a long random string before deploying.
+api_key = "CHANGE_ME_TO_A_LONG_RANDOM_STRING"
+
+[database]
+# Either "sqlite" or "postgres"
+backend = "sqlite"
+
+# For sqlite: a file path. The file is created on first run.
+sqlite_path = "tbk_progression.db"
+
+# For postgres: a libpq-style connection string.
+# Example: "postgres://tbk:secret@localhost:5432/tbk_progression"
+postgres_url = ""
+
+# Maximum number of pooled DB connections.
+max_connections = 10

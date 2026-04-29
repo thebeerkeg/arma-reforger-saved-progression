@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>TBK Progression</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          tbk: {
+            bg: '#0b0f14',
+            panel: '#11161d',
+            border: '#1f2933',
+            accent: '#f59e0b',
+          },
+        },
+      },
+    },
+  };
+</script>
+</head>
+<body class="bg-tbk-bg text-slate-200 min-h-screen font-sans antialiased">
+  <div class="max-w-6xl mx-auto px-4 py-8">
+    <header class="flex items-end justify-between mb-8 flex-wrap gap-4">
+      <div>
+        <h1 class="text-3xl font-bold tracking-tight text-white">TBK Progression</h1>
+        <p class="text-sm text-slate-400 mt-1">Live stats from the Saved Progression bridge</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="updated" class="text-xs text-slate-500"></span>
+        <button id="refresh"
+          class="px-3 py-1.5 text-sm rounded-md bg-tbk-panel border border-tbk-border hover:border-tbk-accent hover:text-tbk-accent transition">
+          Refresh
+        </button>
+      </div>
+    </header>
+
+    <section id="tiles" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8"></section>
+
+    <section class="bg-tbk-panel border border-tbk-border rounded-lg overflow-hidden">
+      <div class="px-4 py-3 border-b border-tbk-border flex items-center justify-between">
+        <h2 class="font-semibold text-white">Leaderboard</h2>
+        <span id="lb-count" class="text-xs text-slate-500"></span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="text-left text-xs uppercase tracking-wider text-slate-400 bg-black/20">
+            <tr>
+              <th class="px-4 py-2 w-12">#</th>
+              <th class="px-4 py-2">Player</th>
+              <th class="px-4 py-2 text-right">Score</th>
+              <th class="px-4 py-2 text-right">Kills</th>
+              <th class="px-4 py-2 text-right">Deaths</th>
+            </tr>
+          </thead>
+          <tbody id="lb-body" class="divide-y divide-tbk-border">
+            <tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <p id="error" class="hidden mt-4 text-sm text-red-400"></p>
+  </div>
+
+<script>
+  const fmtInt = (n) => Number(n).toLocaleString();
+  const fmtPlaytime = (s) => {
+    s = Math.max(0, Number(s) | 0);
+    const d = Math.floor(s / 86400);
+    const h = Math.floor((s % 86400) / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+  };
+  const escapeHtml = (s) =>
+    String(s).replace(/[&<>"']/g, (c) => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+
+  const TILES = [
+    { key: 'total_players',          label: 'Players',     fmt: fmtInt },
+    { key: 'total_score',            label: 'Total Score', fmt: fmtInt },
+    { key: 'total_kills',            label: 'Kills',       fmt: fmtInt },
+    { key: 'total_ai_kills',         label: 'AI Kills',    fmt: fmtInt },
+    { key: 'total_deaths',           label: 'Deaths',      fmt: fmtInt },
+    { key: 'total_objectives',       label: 'Objectives',  fmt: fmtInt },
+    { key: 'total_playtime_seconds', label: 'Playtime',    fmt: fmtPlaytime },
+  ];
+
+  function renderTiles(agg) {
+    const html = TILES.map(t => `
+      <div class="bg-tbk-panel border border-tbk-border rounded-lg px-4 py-3">
+        <div class="text-xs uppercase tracking-wider text-slate-400">${t.label}</div>
+        <div class="mt-1 text-2xl font-semibold text-white tabular-nums">${t.fmt(agg[t.key] ?? 0)}</div>
+      </div>
+    `).join('');
+    document.getElementById('tiles').innerHTML = html;
+  }
+
+  function renderLeaderboard(rows) {
+    const body = document.getElementById('lb-body');
+    document.getElementById('lb-count').textContent = `${rows.length} player${rows.length === 1 ? '' : 's'}`;
+    if (!rows.length) {
+      body.innerHTML = `<tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">No players yet.</td></tr>`;
+      return;
+    }
+    body.innerHTML = rows.map(r => `
+      <tr class="hover:bg-black/20">
+        <td class="px-4 py-2 text-slate-500 tabular-nums">${r.rank}</td>
+        <td class="px-4 py-2 text-white">${escapeHtml(r.last_known_name)}</td>
+        <td class="px-4 py-2 text-right tabular-nums">${fmtInt(r.total_score)}</td>
+        <td class="px-4 py-2 text-right tabular-nums">${fmtInt(r.kills)}</td>
+        <td class="px-4 py-2 text-right tabular-nums">${fmtInt(r.deaths)}</td>
+      </tr>
+    `).join('');
+  }
+
+  async function load() {
+    const err = document.getElementById('error');
+    err.classList.add('hidden');
+    try {
+      const res = await fetch('/api/stats', { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      renderTiles(data.aggregate || {});
+      renderLeaderboard(data.leaderboard || []);
+      document.getElementById('updated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
+    } catch (e) {
+      err.textContent = `Failed to load stats: ${e.message}`;
+      err.classList.remove('hidden');
+    }
+  }
+
+  document.getElementById('refresh').addEventListener('click', load);
+  load();
+  setInterval(load, 30_000);
+</script>
+</body>
+</html>
