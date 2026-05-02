@@ -161,3 +161,17 @@ pub async fn api_stats(
         "leaderboard": leaderboard,
     })))
 }
+
+// Public player lookup for the dashboard's detail modal. Mirrors GET /player/:uid
+// but without the api_key gate — the dashboard itself is public.
+pub async fn api_player(
+    State(state): State<SharedState>,
+    Path(uid): Path<String>,
+) -> BridgeResult<Json<PlayerRecord>> {
+    let rec = state
+        .store
+        .get_player(&uid)
+        .await?
+        .ok_or_else(|| BridgeError::NotFound(uid.clone()))?;
+    Ok(Json(rec))
+}

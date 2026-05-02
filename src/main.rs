@@ -51,6 +51,7 @@ async fn main() -> Result<()> {
     let app = Router::new()
         .route("/", get(handlers::dashboard_page))
         .route("/api/stats", get(handlers::api_stats))
+        .route("/api/player/:uid", get(handlers::api_player))
         .route("/health", get(handlers::health))
         .route("/player/:uid", get(handlers::get_player))
         .route("/player/:uid/increment", post(handlers::upsert_player))

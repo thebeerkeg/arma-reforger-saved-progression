@@ -66,6 +66,21 @@
     <p id="error" class="hidden mt-4 text-sm text-red-400"></p>
   </div>
 
+  <div id="modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div id="modal-backdrop" class="absolute inset-0 bg-black/70"></div>
+    <div class="relative bg-tbk-panel border border-tbk-border rounded-lg shadow-xl w-full max-w-lg">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-tbk-border">
+        <h3 id="modal-title" class="font-semibold text-white truncate">Player</h3>
+        <button id="modal-close"
+          class="text-slate-400 hover:text-white text-xl leading-none px-2"
+          aria-label="Close">&times;</button>
+      </div>
+      <div id="modal-body" class="p-5 text-sm">
+        <div class="text-slate-500">Loading…</div>
+      </div>
+    </div>
+  </div>
+
 <script>
   const fmtInt = (n) => Number(n).toLocaleString();
   const fmtPlaytime = (s) => {
@@ -110,7 +125,8 @@
       return;
     }
     body.innerHTML = rows.map(r => `
-      <tr class="hover:bg-black/20">
+      <tr data-uid="${escapeHtml(r.player_uid)}" data-name="${escapeHtml(r.last_known_name)}"
+          class="cursor-pointer hover:bg-black/30 transition-colors">
         <td class="px-4 py-2 text-slate-500 tabular-nums">${r.rank}</td>
         <td class="px-4 py-2 text-white">${escapeHtml(r.last_known_name)}</td>
         <td class="px-4 py-2 text-right tabular-nums">${fmtInt(r.total_score)}</td>
@@ -119,6 +135,78 @@
       </tr>
     `).join('');
   }
+
+  // ---- player detail modal ----
+  const modal = document.getElementById('modal');
+  const modalBody = document.getElementById('modal-body');
+  const modalTitle = document.getElementById('modal-title');
+
+  function openModal() {
+    modal.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+  }
+  function closeModal() {
+    modal.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+    modalBody.innerHTML = '<div class="text-slate-500">Loading…</div>';
+  }
+
+  function renderPlayer(p) {
+    const fmtDate = (s) => {
+      const d = new Date(s);
+      return isNaN(d) ? String(s) : d.toLocaleString();
+    };
+    const rows = [
+      ['Player UID',  p.player_uid,                              'font-mono text-xs break-all'],
+      ['Total Score', fmtInt(p.total_score),                     'tabular-nums'],
+      ['Kills',       fmtInt(p.kills),                           'tabular-nums'],
+      ['AI Kills',    fmtInt(p.ai_kills),                        'tabular-nums'],
+      ['Deaths',      fmtInt(p.deaths),                          'tabular-nums'],
+      ['Objectives',  fmtInt(p.objectives),                      'tabular-nums'],
+      ['Playtime',    fmtPlaytime(p.playtime_seconds),           'tabular-nums'],
+      ['First Seen',  fmtDate(p.first_seen),                     ''],
+      ['Last Seen',   fmtDate(p.last_seen),                      ''],
+    ];
+    modalBody.innerHTML = `
+      <dl class="divide-y divide-tbk-border">
+        ${rows.map(([k, v, cls]) => `
+          <div class="grid grid-cols-3 gap-3 py-2">
+            <dt class="text-slate-400">${k}</dt>
+            <dd class="col-span-2 text-white ${cls}">${escapeHtml(v)}</dd>
+          </div>
+        `).join('')}
+      </dl>
+    `;
+  }
+
+  async function showPlayer(uid, name) {
+    modalTitle.textContent = name || uid;
+    modalBody.innerHTML = '<div class="text-slate-500">Loading…</div>';
+    openModal();
+    try {
+      const res = await fetch(`/api/player/${encodeURIComponent(uid)}`, { cache: 'no-store' });
+      if (res.status === 404) {
+        modalBody.innerHTML = '<div class="text-slate-500">Player not found.</div>';
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const p = await res.json();
+      renderPlayer(p);
+    } catch (e) {
+      modalBody.innerHTML = `<div class="text-red-400">Failed to load: ${escapeHtml(e.message)}</div>`;
+    }
+  }
+
+  document.getElementById('lb-body').addEventListener('click', (e) => {
+    const row = e.target.closest('tr[data-uid]');
+    if (!row) return;
+    showPlayer(row.dataset.uid, row.dataset.name);
+  });
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.getElementById('modal-backdrop').addEventListener('click', closeModal);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+  });
 
   async function load() {
     const err = document.getElementById('error');

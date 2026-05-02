@@ -38,12 +38,13 @@ Restart the bridge. The schema is created automatically on first start.
 
 ## Endpoints
 
-`/`, `/api/stats`, and `/health` are public. All other endpoints require the header `X-Api-Key: <your api_key>`.
+`/`, `/api/*`, and `/health` are public. All other endpoints require the header `X-Api-Key: <your api_key>`.
 
 | Method | Path | Body | Returns |
 |---|---|---|---|
 | GET  | `/` | — | HTML dashboard (stats + leaderboard) |
 | GET  | `/api/stats` | — | `{ "aggregate": { ... }, "leaderboard": [ ... ] }` |
+| GET  | `/api/player/:uid` | — | `PlayerRecord` JSON or 404 |
 | GET  | `/health` | — | `ok` |
 | GET  | `/player/:uid` | — | `PlayerRecord` JSON or 404 |
 | POST | `/player/:uid/increment` | `{ "last_known_name": "...", "kills": 1, "total_score": 10, ... }` | updated `PlayerRecord` |
