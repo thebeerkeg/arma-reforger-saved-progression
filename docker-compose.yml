@@ -1,0 +1,34 @@
+services:
+  bridge:
+    build: .
+    image: tbk-progression-bridge
+    container_name: tbk-progression-bridge
+    restart: unless-stopped
+    ports:
+      # Bind to localhost on the host. Same posture as the bare-metal
+      # default: only the local Reforger server should reach it.
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - ./config.toml:/app/config.toml:ro
+      - bridge-data:/data
+
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["postgres"]
+    container_name: tbk-progression-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tbk}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-tbk_progression}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tbk} -d ${POSTGRES_DB:-tbk_progression}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  bridge-data:
+  postgres-data:

@@ -6,13 +6,56 @@ The Reforger game itself cannot speak SQL directly from Enforce Script, so this 
 
 ## Install
 
-### Prerequisites
+Two ways to run the bridge:
 
-- Rust toolchain — install via https://rustup.rs
+- **[Docker Compose](#option-a--docker-compose-recommended)** — recommended. One command brings up the bridge, with optional Postgres behind a Compose profile. No Rust toolchain on the host.
+- **[Manual build](#option-b--manual-build)** — build from source with `cargo`. Useful for development, or when you don't want Docker on the host.
 
-The binary looks for `config.toml` in the current directory by default, so the simplest layout is to keep `config.toml` in the repo root and run the binary from there. Use `--config <path>` if you want it elsewhere.
+In both cases the bridge reads `config.toml` from its working directory (override with `--config <path>`). On first run it creates the SQLite file (if using SQLite) and applies the schema in either backend.
 
-### Windows
+Once it's up, verify:
+
+```bash
+curl http://127.0.0.1:8787/health
+# -> ok
+```
+
+Open `http://127.0.0.1:8787/` in a browser to see the dashboard.
+
+### Option A — Docker Compose (recommended)
+
+Requires Docker Engine 20.10+ with the Compose v2 plugin. Postgres is opt-in via a Compose profile — by default you get the bridge alone, with SQLite persisted to a named volume.
+
+**SQLite (default):**
+
+```bash
+git clone <repo-url>
+cd TBKSavedProgressionBridge
+cp config.docker.example.toml config.toml
+# Edit config.toml and set api_key to a long random string.
+docker compose up -d --build
+```
+
+**Postgres:**
+
+```bash
+cp config.docker.example.toml config.toml
+# In config.toml: switch the [database] block to postgres (the example file
+# has the lines pre-filled and commented out) and set the password in the URL.
+cp .env.example .env
+# Edit .env and set POSTGRES_PASSWORD to match the URL in config.toml.
+docker compose --profile postgres up -d --build
+```
+
+Tail logs with `docker compose logs -f bridge`.
+
+The compose file binds the bridge to `127.0.0.1:8787` on the host (same posture as the bare-metal default — only the local Reforger server should reach it). Data lives in named volumes (`bridge-data` for SQLite, `postgres-data` for Postgres) so `docker compose down` is non-destructive; use `docker compose down -v` to wipe.
+
+### Option B — Manual build
+
+Prerequisite: Rust toolchain — install via https://rustup.rs.
+
+**Windows:**
 
 ```powershell
 git clone <repo-url>
@@ -23,7 +66,7 @@ copy config.example.toml config.toml
 .\target\release\tbk-progression-bridge.exe
 ```
 
-### Linux
+**Linux:**
 
 ```bash
 git clone <repo-url>
@@ -33,17 +76,6 @@ cp config.example.toml config.toml
 # Edit config.toml and set api_key to a long random string.
 ./target/release/tbk-progression-bridge
 ```
-
-On first run the bridge creates the SQLite file (if using SQLite) and the schema in either backend.
-
-Verify it's running:
-
-```bash
-curl http://127.0.0.1:8787/health
-# -> ok
-```
-
-Open `http://127.0.0.1:8787/` in a browser to see the dashboard.
 
 ## Configuration
 

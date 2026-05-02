@@ -1,0 +1,15 @@
+target/
+.git/
+.gitignore
+.idea/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+config.toml
+.env
+Dockerfile
+docker-compose.yml
+.dockerignore
+README.md
+Tools/
