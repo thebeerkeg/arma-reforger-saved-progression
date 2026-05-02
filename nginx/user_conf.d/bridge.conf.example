@@ -1,0 +1,42 @@
+# Reverse proxy + Let's Encrypt SSL for the TBK Progression Bridge.
+#
+# Setup:
+#   1. Copy this file to bridge.conf in the same directory.
+#   2. Replace EVERY occurrence of bridge.example.com with your real domain.
+#   3. Set CERTBOT_EMAIL in .env so Let's Encrypt can contact you about renewals.
+#   4. Make sure the domain's A/AAAA record points at this host and ports 80
+#      and 443 are open in the firewall — the ACME HTTP-01 challenge needs 80.
+#   5. docker compose --profile https up -d
+
+# Strip the api_key query param from access logs. Without this, every request
+# from the Reforger addon would write the shared secret into nginx logs.
+log_format clean '$remote_addr - $remote_user [$time_local] '
+                 '"$request_method $uri $server_protocol" '
+                 '$status $body_bytes_sent '
+                 '"$http_referer" "$http_user_agent"';
+
+server {
+    listen      443 ssl;
+    listen [::]:443 ssl;
+    http2       on;
+    server_name bridge.example.com;
+
+    ssl_certificate         /etc/letsencrypt/live/bridge.example.com/fullchain.pem;
+    ssl_certificate_key     /etc/letsencrypt/live/bridge.example.com/privkey.pem;
+    ssl_trusted_certificate /etc/letsencrypt/live/bridge.example.com/chain.pem;
+    ssl_dhparam             /etc/letsencrypt/dhparams/dhparam.pem;
+
+    access_log /var/log/nginx/access.log clean;
+
+    # Largest payload is /player/batch-increment; 1 MB is plenty.
+    client_max_body_size 1m;
+
+    location / {
+        proxy_pass         http://bridge:8787;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_read_timeout 30s;
+    }
+}

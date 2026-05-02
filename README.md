@@ -8,7 +8,7 @@ The Reforger game itself cannot speak SQL directly from Enforce Script, so this 
 
 Two ways to run the bridge:
 
-- **[Docker Compose](#option-a--docker-compose-recommended)** — recommended. One command brings up the bridge, with optional Postgres behind a Compose profile. No Rust toolchain on the host.
+- **[Docker Compose](#option-a--docker-compose-recommended)** — recommended. One command brings up the bridge; Postgres and HTTPS are opt-in via Compose profiles and combine freely. No Rust toolchain on the host.
 - **[Manual build](#option-b--manual-build)** — build from source with `cargo`. Useful for development, or when you don't want Docker on the host.
 
 In both cases the bridge reads `config.toml` from its working directory (override with `--config <path>`). On first run it creates the SQLite file (if using SQLite) and applies the schema in either backend.
@@ -24,7 +24,7 @@ Open `http://127.0.0.1:8787/` in a browser to see the dashboard.
 
 ### Option A — Docker Compose (recommended)
 
-Requires Docker Engine 20.10+ with the Compose v2 plugin. Postgres is opt-in via a Compose profile — by default you get the bridge alone, with SQLite persisted to a named volume.
+Requires Docker Engine 20.10+ with the Compose v2 plugin. The default stack is the bridge alone with SQLite on a named volume; Postgres and HTTPS are each opt-in via a Compose profile and combine freely.
 
 **SQLite (default):**
 
@@ -47,9 +47,26 @@ cp .env.example .env
 docker compose --profile postgres up -d --build
 ```
 
-Tail logs with `docker compose logs -f bridge`.
+**HTTPS / external access:**
 
-The compose file binds the bridge to `127.0.0.1:8787` on the host (same posture as the bare-metal default — only the local Reforger server should reach it). Data lives in named volumes (`bridge-data` for SQLite, `postgres-data` for Postgres) so `docker compose down` is non-destructive; use `docker compose down -v` to wipe.
+Use this when the Reforger server runs on a different machine, or when you want the dashboard reachable from the public internet. An nginx reverse proxy fronts the bridge with an automatically-issued Let's Encrypt cert.
+
+Prerequisites:
+
+- A domain with an A/AAAA record pointing at this host.
+- Ports `80` and `443` open in the firewall (port 80 is needed for the ACME HTTP-01 challenge and renewals).
+
+```bash
+cp nginx/user_conf.d/bridge.conf.example nginx/user_conf.d/bridge.conf
+# Replace every `bridge.example.com` in bridge.conf with your real domain.
+cp .env.example .env   # if you haven't already
+# Set CERTBOT_EMAIL in .env (Let's Encrypt uses it for expiry warnings).
+docker compose --profile https up -d --build
+```
+
+Combine with `--profile postgres` to enable both. Once nginx has a certificate, the bridge is reachable at `https://your.domain/`. The container also stays bound to `127.0.0.1:8787` on the host, so a same-machine Reforger server can keep talking to `http://127.0.0.1:8787` with no extra TLS overhead — point the addon at the public URL only when the game server lives elsewhere. The api_key gates `/player/*` and `/leaderboard` either way; the supplied nginx config strips query strings from access logs so the key isn't recorded server-side.
+
+Tail logs with `docker compose logs -f bridge` (add `nginx` for the proxy). Data lives in named volumes (`bridge-data` for SQLite, `postgres-data` for Postgres, `nginx-secrets` for issued certs) so `docker compose down` is non-destructive; use `docker compose down -v` to wipe.
 
 ### Option B — Manual build
 
@@ -85,7 +102,7 @@ cp config.example.toml config.toml
 
 | Key | Description |
 |---|---|
-| `bind_address` | Address and port to listen on. Default `"127.0.0.1:8787"`. Use `"0.0.0.0:8787"` only when reachable through a firewall or reverse proxy. |
+| `bind_address` | Address and port to listen on. Default `"127.0.0.1:8787"` for the manual build (keeps it off the network). For Docker, the bundled `config.docker.example.toml` uses `"0.0.0.0:8787"` so traffic from other containers (and the published host port) can reach it — host-side exposure is controlled by the `ports:` mapping in `docker-compose.yml`, not this setting. |
 | `api_key` | Shared secret. Required for `/player/*` and `/leaderboard` endpoints. **Must be changed from the default value.** |
 
 ### `[database]`
@@ -111,7 +128,10 @@ Customizes the public web dashboard at `/`. Omit the whole section, or any indiv
 ```toml
 [database]
 backend = "postgres"
+# Manual build, Postgres on the same host:
 postgres_url = "postgres://tbk:secret@localhost:5432/tbk_progression"
+# Docker Compose with --profile postgres (host is the service name):
+# postgres_url = "postgres://tbk:secret@postgres:5432/tbk_progression"
 ```
 
 Restart the bridge. The schema is created automatically on first start.
@@ -154,11 +174,13 @@ Increment bodies accept any of these fields. All are optional, default to `0`, a
 
 ## Deploying alongside an Arma Reforger server
 
-- Run this binary on the same machine as the dedicated server.
-- Keep `bind_address = "127.0.0.1:8787"` so it isn't reachable from the public internet.
-- Point the addon at `http://127.0.0.1:8787` in `TBK_ProgressionConfig.conf` inside the addon.
-- The addon authenticates via the `?api_key=` query-param form (see [Authentication](#authentication)).
-- If you want the dashboard publicly visible, put a reverse proxy (nginx, Caddy) in front of the bridge and only proxy `/`, `/api/*`, and `/health` — keep the gated endpoints on localhost.
+Two supported topologies:
+
+**Same machine as the dedicated server (simplest).** Run the bridge on the Reforger host, keep it bound to localhost, and point the addon at `http://127.0.0.1:8787` in `TBK_ProgressionConfig.conf`. With Docker Compose this is the default profile — the published port is `127.0.0.1:8787:8787`, so nothing external reaches the bridge. If you also want a public dashboard, enable `--profile https` (see [HTTPS / external access](#option-a--docker-compose-recommended)); the local addon can keep using the loopback URL even with HTTPS active.
+
+**Separate machine from the dedicated server.** Run the bridge on its own host with `--profile https` enabled and DNS pointed at it. Set the addon's URL to `https://your.domain` in `TBK_ProgressionConfig.conf`. The api_key gates `/player/*` and `/leaderboard`, so HTTPS + a strong key is the only thing standing between the internet and your write endpoints — pick a long random string.
+
+In both cases the addon authenticates via the `?api_key=` query-param form (see [Authentication](#authentication)) — Reforger's `RestApi` strips custom headers before they leave the game.
 
 ## Smoke testing
 
@@ -168,4 +190,4 @@ Increment bodies accept any of these fields. All are optional, default to `0`, a
 
 - `cargo check` — fast type-check.
 - `cargo build --release` — optimized binary at `target/release/tbk-progression-bridge[.exe]`.
-- `target/`, `Cargo.lock`, `*.db`, `config.toml`, and `.idea/` are gitignored.
+- See `.gitignore` for the full list of ignored paths. Notable: build output (`target/`, `Cargo.lock`), local databases (`*.db*`), and anything containing secrets (`config.toml`, `.env`, `nginx/user_conf.d/bridge.conf`).

@@ -7,3 +7,4 @@ Cargo.lock
 config.toml
 .env
 .idea/
+nginx/user_conf.d/bridge.conf

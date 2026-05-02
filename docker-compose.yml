@@ -29,6 +29,23 @@ services:
       timeout: 5s
       retries: 10
 
+  nginx:
+    image: jonasal/nginx-certbot:5
+    profiles: ["https"]
+    container_name: tbk-progression-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      CERTBOT_EMAIL: ${CERTBOT_EMAIL:?set CERTBOT_EMAIL in .env}
+    volumes:
+      - ./nginx/user_conf.d:/etc/nginx/user_conf.d:ro
+      - nginx-secrets:/etc/letsencrypt
+    depends_on:
+      - bridge
+
 volumes:
   bridge-data:
   postgres-data:
+  nginx-secrets:
