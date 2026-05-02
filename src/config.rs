@@ -47,7 +47,7 @@ impl Config {
 
     fn validate(&self) -> Result<()> {
         if self.server.api_key.trim().is_empty()
-            || self.server.api_key == "CHANGE_ME_TO_A_LONG_RANDOM_STRING"
+            || self.server.api_key == "CHANGE_ME"
         {
             anyhow::bail!("server.api_key must be set to a non-default value");
         }

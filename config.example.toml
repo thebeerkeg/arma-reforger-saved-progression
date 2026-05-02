@@ -8,7 +8,7 @@ bind_address = "127.0.0.1:8787"
 
 # Shared secret. The Reforger addon must send this in the X-Api-Key header.
 # CHANGE THIS to a long random string before deploying.
-api_key = "CHANGE_ME_TO_A_LONG_RANDOM_STRING"
+api_key = "CHANGE_ME"
 
 [database]
 # Either "sqlite" or "postgres"
