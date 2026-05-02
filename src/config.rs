@@ -6,6 +6,8 @@ use std::path::Path;
 pub struct Config {
     pub server: ServerConfig,
     pub database: DatabaseConfig,
+    #[serde(default)]
+    pub dashboard: DashboardConfig,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -25,8 +27,33 @@ pub struct DatabaseConfig {
     pub max_connections: u32,
 }
 
+#[derive(Debug, Deserialize, Clone)]
+pub struct DashboardConfig {
+    #[serde(default = "default_dashboard_title")]
+    pub title: String,
+    #[serde(default = "default_dashboard_subtitle")]
+    pub subtitle: String,
+}
+
+impl Default for DashboardConfig {
+    fn default() -> Self {
+        Self {
+            title: default_dashboard_title(),
+            subtitle: default_dashboard_subtitle(),
+        }
+    }
+}
+
 fn default_max_conns() -> u32 {
     10
+}
+
+fn default_dashboard_title() -> String {
+    "TBK Progression".to_string()
+}
+
+fn default_dashboard_subtitle() -> String {
+    "Live stats from the Saved Progression bridge".to_string()
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]

@@ -14,6 +14,21 @@ use std::sync::Arc;
 pub struct AppState {
     pub store: AnyStore,
     pub api_key: String,
+    pub dashboard_html: String,
+}
+
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+pub fn render_dashboard_html(title: &str, subtitle: &str) -> String {
+    include_str!("dashboard.html")
+        .replace("{{TITLE}}", &html_escape(title))
+        .replace("{{SUBTITLE}}", &html_escape(subtitle))
 }
 
 pub type SharedState = Arc<AppState>;
@@ -144,9 +159,10 @@ pub async fn leaderboard(
 }
 
 // Public dashboard: serves the embedded single-page UI. No auth — read-only,
-// derived from the same data the leaderboard endpoint exposes.
-pub async fn dashboard_page() -> Html<&'static str> {
-    Html(include_str!("dashboard.html"))
+// derived from the same data the leaderboard endpoint exposes. The HTML is
+// pre-rendered once at startup with the configured title/subtitle.
+pub async fn dashboard_page(State(state): State<SharedState>) -> Html<String> {
+    Html(state.dashboard_html.clone())
 }
 
 // Public stats payload consumed by the dashboard. Aggregates + top 100 in one

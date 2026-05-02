@@ -43,9 +43,13 @@ async fn main() -> Result<()> {
     store.migrate().await?;
     tracing::info!("database ready");
 
+    let dashboard_html =
+        handlers::render_dashboard_html(&cfg.dashboard.title, &cfg.dashboard.subtitle);
+
     let state: SharedState = Arc::new(AppState {
         store,
         api_key: cfg.server.api_key.clone(),
+        dashboard_html,
     });
 
     let app = Router::new()

@@ -23,3 +23,9 @@ postgres_url = ""
 
 # Maximum number of pooled DB connections.
 max_connections = 10
+
+# The web dashboard (GET /) shows aggregate stats and the leaderboard.
+# Both fields are optional — if you omit the section, the defaults below are used.
+[dashboard]
+title = "TBK Progression"
+subtitle = "Live stats from the Saved Progression bridge"
