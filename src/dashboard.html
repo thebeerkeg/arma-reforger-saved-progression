@@ -41,9 +41,10 @@
     <section id="tiles" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8"></section>
 
     <section class="bg-tbk-panel border border-tbk-border rounded-lg overflow-hidden">
-      <div class="px-4 py-3 border-b border-tbk-border flex items-center justify-between">
+      <div class="px-4 py-3 border-b border-tbk-border flex items-center justify-between gap-3 flex-wrap">
         <h2 class="font-semibold text-white">Leaderboard</h2>
-        <span id="lb-count" class="text-xs text-slate-500"></span>
+        <input id="search" type="search" placeholder="Search players…" autocomplete="off"
+          class="px-3 py-1.5 text-sm rounded-md bg-tbk-bg border border-tbk-border placeholder:text-slate-500 focus:border-tbk-accent focus:outline-none w-48 sm:w-64" />
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
@@ -60,6 +61,20 @@
             <tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Loading…</td></tr>
           </tbody>
         </table>
+      </div>
+      <div class="px-4 py-3 border-t border-tbk-border flex items-center justify-between gap-3 flex-wrap">
+        <span id="lb-count" class="text-xs text-slate-500"></span>
+        <div class="flex items-center gap-2">
+          <button id="prev"
+            class="px-3 py-1 text-sm rounded-md bg-tbk-bg border border-tbk-border hover:border-tbk-accent hover:text-tbk-accent disabled:opacity-40 disabled:hover:border-tbk-border disabled:hover:text-slate-200 transition">
+            Prev
+          </button>
+          <span id="page-info" class="text-xs text-slate-400 tabular-nums min-w-[6rem] text-center"></span>
+          <button id="next"
+            class="px-3 py-1 text-sm rounded-md bg-tbk-bg border border-tbk-border hover:border-tbk-accent hover:text-tbk-accent disabled:opacity-40 disabled:hover:border-tbk-border disabled:hover:text-slate-200 transition">
+            Next
+          </button>
+        </div>
       </div>
     </section>
 
@@ -117,23 +132,42 @@
     document.getElementById('tiles').innerHTML = html;
   }
 
-  function renderLeaderboard(rows) {
+  const PAGE_SIZE = 25;
+  const state = { page: 0, search: '', total: 0 };
+
+  function renderLeaderboard(rows, total, offset) {
     const body = document.getElementById('lb-body');
-    document.getElementById('lb-count').textContent = `${rows.length} player${rows.length === 1 ? '' : 's'}`;
+    state.total = total;
+
     if (!rows.length) {
-      body.innerHTML = `<tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">No players yet.</td></tr>`;
-      return;
+      const msg = state.search
+        ? `No players match "${escapeHtml(state.search)}".`
+        : 'No players yet.';
+      body.innerHTML = `<tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">${msg}</td></tr>`;
+    } else {
+      body.innerHTML = rows.map(r => `
+        <tr data-uid="${escapeHtml(r.player_uid)}" data-name="${escapeHtml(r.last_known_name)}"
+            class="cursor-pointer hover:bg-black/30 transition-colors">
+          <td class="px-4 py-2 text-slate-500 tabular-nums">${r.rank}</td>
+          <td class="px-4 py-2 text-white">${escapeHtml(r.last_known_name)}</td>
+          <td class="px-4 py-2 text-right tabular-nums">${fmtInt(r.total_score)}</td>
+          <td class="px-4 py-2 text-right tabular-nums">${fmtInt(r.kills)}</td>
+          <td class="px-4 py-2 text-right tabular-nums">${fmtInt(r.deaths)}</td>
+        </tr>
+      `).join('');
     }
-    body.innerHTML = rows.map(r => `
-      <tr data-uid="${escapeHtml(r.player_uid)}" data-name="${escapeHtml(r.last_known_name)}"
-          class="cursor-pointer hover:bg-black/30 transition-colors">
-        <td class="px-4 py-2 text-slate-500 tabular-nums">${r.rank}</td>
-        <td class="px-4 py-2 text-white">${escapeHtml(r.last_known_name)}</td>
-        <td class="px-4 py-2 text-right tabular-nums">${fmtInt(r.total_score)}</td>
-        <td class="px-4 py-2 text-right tabular-nums">${fmtInt(r.kills)}</td>
-        <td class="px-4 py-2 text-right tabular-nums">${fmtInt(r.deaths)}</td>
-      </tr>
-    `).join('');
+
+    const from = total === 0 ? 0 : offset + 1;
+    const to = offset + rows.length;
+    document.getElementById('lb-count').textContent = total === 0
+      ? '0 players'
+      : `Showing ${fmtInt(from)}–${fmtInt(to)} of ${fmtInt(total)}`;
+
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const currentPage = Math.min(state.page, totalPages - 1);
+    document.getElementById('page-info').textContent = `Page ${currentPage + 1} / ${totalPages}`;
+    document.getElementById('prev').disabled = currentPage <= 0;
+    document.getElementById('next').disabled = currentPage >= totalPages - 1;
   }
 
   // ---- player detail modal ----
@@ -208,21 +242,67 @@
     if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
   });
 
+  async function loadAggregate() {
+    const res = await fetch('/api/stats', { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderTiles(data.aggregate || {});
+  }
+
+  async function loadLeaderboard() {
+    const params = new URLSearchParams({
+      limit: String(PAGE_SIZE),
+      offset: String(state.page * PAGE_SIZE),
+    });
+    if (state.search) params.set('q', state.search);
+    const res = await fetch(`/api/leaderboard?${params}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderLeaderboard(data.entries || [], data.total || 0, data.offset || 0);
+  }
+
   async function load() {
     const err = document.getElementById('error');
     err.classList.add('hidden');
     try {
-      const res = await fetch('/api/stats', { cache: 'no-store' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      renderTiles(data.aggregate || {});
-      renderLeaderboard(data.leaderboard || []);
+      await Promise.all([loadAggregate(), loadLeaderboard()]);
       document.getElementById('updated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
     } catch (e) {
       err.textContent = `Failed to load stats: ${e.message}`;
       err.classList.remove('hidden');
     }
   }
+
+  // Search: debounce input, reset to page 0 on change.
+  let searchTimer = null;
+  document.getElementById('search').addEventListener('input', (e) => {
+    const value = e.target.value;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      if (value === state.search) return;
+      state.search = value;
+      state.page = 0;
+      loadLeaderboard().catch((err) => {
+        const el = document.getElementById('error');
+        el.textContent = `Failed to load stats: ${err.message}`;
+        el.classList.remove('hidden');
+      });
+    }, 300);
+  });
+
+  document.getElementById('prev').addEventListener('click', () => {
+    if (state.page > 0) {
+      state.page--;
+      loadLeaderboard();
+    }
+  });
+  document.getElementById('next').addEventListener('click', () => {
+    const totalPages = Math.max(1, Math.ceil(state.total / PAGE_SIZE));
+    if (state.page < totalPages - 1) {
+      state.page++;
+      loadLeaderboard();
+    }
+  });
 
   document.getElementById('refresh').addEventListener('click', load);
   load();

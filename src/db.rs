@@ -20,6 +20,34 @@ pub trait Store: Send + Sync {
     ) -> BridgeResult<usize>;
     async fn leaderboard(&self, limit: i64) -> BridgeResult<Vec<LeaderboardEntry>>;
     async fn aggregate_stats(&self) -> BridgeResult<AggregateStats>;
+    async fn leaderboard_paged(
+        &self,
+        limit: i64,
+        offset: i64,
+        search: Option<&str>,
+    ) -> BridgeResult<(Vec<LeaderboardEntry>, i64)>;
+}
+
+// Builds a case-insensitive LIKE pattern with `\` as the escape character.
+// Empty/whitespace input matches everything (returns "%"). User % and _ are
+// escaped so they're treated as literal characters, not wildcards.
+fn build_like_pattern(s: &str) -> String {
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        return "%".to_string();
+    }
+    let mut out = String::with_capacity(trimmed.len() + 2);
+    out.push('%');
+    for c in trimmed.chars() {
+        if matches!(c, '\\' | '%' | '_') {
+            out.push('\\');
+        }
+        for lc in c.to_lowercase() {
+            out.push(lc);
+        }
+    }
+    out.push('%');
+    out
 }
 
 pub enum AnyStore {
@@ -71,6 +99,17 @@ impl Store for AnyStore {
         match self {
             AnyStore::Sqlite(s) => s.aggregate_stats().await,
             AnyStore::Postgres(p) => p.aggregate_stats().await,
+        }
+    }
+    async fn leaderboard_paged(
+        &self,
+        limit: i64,
+        offset: i64,
+        search: Option<&str>,
+    ) -> BridgeResult<(Vec<LeaderboardEntry>, i64)> {
+        match self {
+            AnyStore::Sqlite(s) => s.leaderboard_paged(limit, offset, search).await,
+            AnyStore::Postgres(p) => p.leaderboard_paged(limit, offset, search).await,
         }
     }
 }
@@ -299,6 +338,55 @@ impl Store for SqliteStore {
             total_playtime_seconds: row.try_get("total_playtime_seconds")?,
         })
     }
+
+    async fn leaderboard_paged(
+        &self,
+        limit: i64,
+        offset: i64,
+        search: Option<&str>,
+    ) -> BridgeResult<(Vec<LeaderboardEntry>, i64)> {
+        // ROW_NUMBER lives in a subquery so ranks are absolute (computed across the
+        // full table) rather than relative to the filtered/paged window.
+        let pattern = build_like_pattern(search.unwrap_or(""));
+        let rows = sqlx::query(
+            r#"
+            SELECT player_uid, last_known_name, total_score, kills, deaths, rank
+            FROM (
+                SELECT player_uid, last_known_name, total_score, kills, deaths,
+                       ROW_NUMBER() OVER (ORDER BY total_score DESC, player_uid) AS rank
+                FROM players
+            )
+            WHERE LOWER(last_known_name) LIKE ? ESCAPE '\'
+            ORDER BY rank
+            LIMIT ? OFFSET ?
+            "#,
+        )
+        .bind(&pattern)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let total: i64 = sqlx::query_scalar(
+            r#"SELECT COUNT(*) FROM players WHERE LOWER(last_known_name) LIKE ? ESCAPE '\'"#,
+        )
+        .bind(&pattern)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let mut entries = Vec::with_capacity(rows.len());
+        for r in &rows {
+            entries.push(LeaderboardEntry {
+                rank: r.try_get("rank")?,
+                player_uid: r.try_get("player_uid")?,
+                last_known_name: r.try_get("last_known_name")?,
+                total_score: r.try_get("total_score")?,
+                kills: r.try_get("kills")?,
+                deaths: r.try_get("deaths")?,
+            });
+        }
+        Ok((entries, total))
+    }
 }
 
 // ---------- Postgres ----------
@@ -495,5 +583,52 @@ impl Store for PostgresStore {
             total_objectives: row.try_get("total_objectives")?,
             total_playtime_seconds: row.try_get("total_playtime_seconds")?,
         })
+    }
+
+    async fn leaderboard_paged(
+        &self,
+        limit: i64,
+        offset: i64,
+        search: Option<&str>,
+    ) -> BridgeResult<(Vec<LeaderboardEntry>, i64)> {
+        let pattern = build_like_pattern(search.unwrap_or(""));
+        let rows = sqlx::query(
+            r#"
+            SELECT player_uid, last_known_name, total_score, kills, deaths, rank
+            FROM (
+                SELECT player_uid, last_known_name, total_score, kills, deaths,
+                       ROW_NUMBER() OVER (ORDER BY total_score DESC, player_uid) AS rank
+                FROM players
+            ) p
+            WHERE LOWER(last_known_name) LIKE $1 ESCAPE '\'
+            ORDER BY rank
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(&pattern)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let total: i64 = sqlx::query_scalar(
+            r#"SELECT COUNT(*) FROM players WHERE LOWER(last_known_name) LIKE $1 ESCAPE '\'"#,
+        )
+        .bind(&pattern)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let mut entries = Vec::with_capacity(rows.len());
+        for r in &rows {
+            entries.push(LeaderboardEntry {
+                rank: r.try_get("rank")?,
+                player_uid: r.try_get("player_uid")?,
+                last_known_name: r.try_get("last_known_name")?,
+                total_score: r.try_get("total_score")?,
+                kills: r.try_get("kills")?,
+                deaths: r.try_get("deaths")?,
+            });
+        }
+        Ok((entries, total))
     }
 }

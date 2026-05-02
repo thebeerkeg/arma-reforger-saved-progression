@@ -42,8 +42,9 @@ Restart the bridge. The schema is created automatically on first start.
 
 | Method | Path | Body | Returns |
 |---|---|---|---|
-| GET  | `/` | — | HTML dashboard (stats + leaderboard) |
-| GET  | `/api/stats` | — | `{ "aggregate": { ... }, "leaderboard": [ ... ] }` |
+| GET  | `/` | — | HTML dashboard (stats + searchable, paginated leaderboard) |
+| GET  | `/api/stats` | — | `{ "aggregate": { ... } }` |
+| GET  | `/api/leaderboard?limit=25&offset=0&q=alice` | — | `{ "entries": [ ... ], "total": N, "limit": L, "offset": O }` |
 | GET  | `/api/player/:uid` | — | `PlayerRecord` JSON or 404 |
 | GET  | `/health` | — | `ok` |
 | GET  | `/player/:uid` | — | `PlayerRecord` JSON or 404 |

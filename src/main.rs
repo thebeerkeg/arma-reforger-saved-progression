@@ -55,6 +55,7 @@ async fn main() -> Result<()> {
     let app = Router::new()
         .route("/", get(handlers::dashboard_page))
         .route("/api/stats", get(handlers::api_stats))
+        .route("/api/leaderboard", get(handlers::api_leaderboard))
         .route("/api/player/:uid", get(handlers::api_player))
         .route("/health", get(handlers::health))
         .route("/player/:uid", get(handlers::get_player))

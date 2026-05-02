@@ -165,16 +165,42 @@ pub async fn dashboard_page(State(state): State<SharedState>) -> Html<String> {
     Html(state.dashboard_html.clone())
 }
 
-// Public stats payload consumed by the dashboard. Aggregates + top 100 in one
-// round trip so the page renders from a single fetch.
+// Public aggregate payload consumed by the dashboard tiles.
 pub async fn api_stats(
     State(state): State<SharedState>,
 ) -> BridgeResult<Json<serde_json::Value>> {
     let aggregate = state.store.aggregate_stats().await?;
-    let leaderboard = state.store.leaderboard(100).await?;
+    Ok(Json(serde_json::json!({ "aggregate": aggregate })))
+}
+
+#[derive(Deserialize)]
+pub struct ApiLeaderboardQuery {
+    #[serde(default = "default_api_limit")]
+    pub limit: i64,
+    #[serde(default)]
+    pub offset: i64,
+    #[serde(default)]
+    pub q: Option<String>,
+}
+fn default_api_limit() -> i64 {
+    25
+}
+
+// Public paginated leaderboard with optional name search. Echoes back the
+// effective limit/offset so the dashboard doesn't have to track its own clamps.
+pub async fn api_leaderboard(
+    State(state): State<SharedState>,
+    Query(q): Query<ApiLeaderboardQuery>,
+) -> BridgeResult<Json<serde_json::Value>> {
+    let limit = q.limit.clamp(1, 100);
+    let offset = q.offset.max(0);
+    let search = q.q.as_deref().filter(|s| !s.trim().is_empty());
+    let (entries, total) = state.store.leaderboard_paged(limit, offset, search).await?;
     Ok(Json(serde_json::json!({
-        "aggregate": aggregate,
-        "leaderboard": leaderboard,
+        "entries": entries,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
     })))
 }
 
