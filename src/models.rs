@@ -35,12 +35,6 @@ pub struct StatDelta {
 #[derive(Debug, Deserialize)]
 pub struct IncrementRequest {
     pub last_known_name: String,
-    /// When present (with `faction`), the same delta is also applied to the
-    /// per-(match, player, faction) row in match_players.
-    #[serde(default)]
-    pub match_id: Option<String>,
-    #[serde(default)]
-    pub faction: Option<String>,
     #[serde(flatten)]
     pub delta: StatDelta,
 }
@@ -49,13 +43,6 @@ pub struct IncrementRequest {
 pub struct BatchIncrementEntry {
     pub player_uid: String,
     pub last_known_name: String,
-    /// Same semantics as IncrementRequest.match_id — both fields must be set
-    /// for the per-match upsert to fire. Missing/empty is fine; the lifetime
-    /// row is always updated.
-    #[serde(default)]
-    pub match_id: Option<String>,
-    #[serde(default)]
-    pub faction: Option<String>,
     #[serde(flatten)]
     pub delta: StatDelta,
 }
@@ -89,10 +76,13 @@ pub struct AggregateStats {
 // -----------------------------------------------------------------------------
 // Match tracking
 // -----------------------------------------------------------------------------
+//
+// Matches are written to the bridge ONLY at clean game-mode end. The addon
+// accumulates per-(player, faction) totals locally during the match and posts
+// the whole match in one atomic /match/finalize call. Server crashes / abrupt
+// shutdowns therefore leave nothing in the matches/match_players tables —
+// abandoned matches are intentionally invisible.
 
-/// One round/session as registered by the addon at game-mode start. The
-/// addon picks the id (so it can reference it from increments before the
-/// register POST has even completed).
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Match {
     pub id: String,
@@ -149,26 +139,44 @@ pub struct MatchListEntry {
     pub total_score: i64,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct RegisterMatchRequest {
-    pub id: String,
-    pub scenario: String,
-    /// Optional — defaults to server's current UTC time. Useful when the
-    /// addon wants to attribute a match to the wall-clock moment it started
-    /// rather than the moment the bridge received the POST.
+/// One row in the roster posted alongside a match's finalize.
+#[derive(Debug, Deserialize, Clone)]
+pub struct FinalizeMatchPlayer {
+    pub player_uid: String,
+    pub last_known_name: String,
+    pub faction: String,
     #[serde(default)]
-    pub start_time: Option<DateTime<Utc>>,
+    pub total_score: i64,
+    #[serde(default)]
+    pub kills: i64,
+    #[serde(default)]
+    pub ai_kills: i64,
+    #[serde(default)]
+    pub deaths: i64,
+    #[serde(default)]
+    pub objectives: i64,
+    #[serde(default)]
+    pub playtime_seconds: i64,
 }
 
+/// Atomic match save — POST /match/finalize. Inserts the matches row plus
+/// every roster entry in one transaction; failure leaves both tables
+/// untouched.
 #[derive(Debug, Deserialize)]
-pub struct EndMatchRequest {
-    /// Free-form faction key (e.g. "US", "USSR", "FIA") or null on draw / Campaign.
+pub struct FinalizeMatchRequest {
+    pub id: String,
+    pub scenario: String,
+    /// Falls back to (now() - duration_unknown) on the bridge when absent.
+    /// Addon should send the wall-clock match start.
     #[serde(default)]
-    pub winning_faction: Option<String>,
-    /// Free-form reason: "victory", "draw", "abandoned", "timeout", etc.
-    #[serde(default)]
-    pub end_reason: Option<String>,
-    /// Optional — defaults to server's current UTC time.
+    pub start_time: Option<DateTime<Utc>>,
+    /// Falls back to server's now() when absent.
     #[serde(default)]
     pub end_time: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub winning_faction: Option<String>,
+    #[serde(default)]
+    pub end_reason: Option<String>,
+    #[serde(default)]
+    pub players: Vec<FinalizeMatchPlayer>,
 }

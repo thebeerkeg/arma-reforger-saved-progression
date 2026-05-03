@@ -343,18 +343,14 @@
   // ---- matches list ----
   const matchesState = { page: 0, total: 0, loaded: false };
 
-  // The "Result" badge — the addon may end matches with `victory`, `draw`,
-  // `abandoned`, `timeout`, or anything else. Color the common cases; leave
-  // unknown values neutral so a custom end_reason still renders intelligibly.
+  // The "Result" badge — every match in the table is finished (the addon
+  // only saves matches at clean game-mode end). Color victory and draw; leave
+  // anything else neutral so an unfamiliar end_reason still renders.
   function resultBadge(m) {
-    if (!m.end_time) {
-      return `<span class="px-2 py-0.5 text-xs rounded bg-yellow-500/15 text-yellow-300 border border-yellow-500/30">live</span>`;
-    }
     const r = (m.end_reason || '').toLowerCase();
     const cls = (
       r === 'victory' ? 'bg-green-500/15 text-green-300 border-green-500/30' :
       r === 'draw'    ? 'bg-slate-500/15 text-slate-300 border-slate-500/30' :
-      r === 'abandoned' ? 'bg-red-500/15 text-red-300 border-red-500/30' :
       'bg-slate-500/15 text-slate-300 border-slate-500/30'
     );
     return `<span class="px-2 py-0.5 text-xs rounded border ${cls}">${escapeHtml(m.end_reason || 'ended')}</span>`;
@@ -426,7 +422,7 @@
       ['Ended',        fmtDate(s.end_time),                        ''],
       ['Duration',     fmtDuration(s.start_time, s.end_time),      'tabular-nums'],
       ['Winner',       s.winning_faction || '—',                   ''],
-      ['Result',       s.end_reason || (s.end_time ? 'ended' : 'live'), ''],
+      ['Result',       s.end_reason || 'ended',                     ''],
     ];
 
     const factionRows = (s.factions || []).map(f => `

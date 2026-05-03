@@ -1,7 +1,7 @@
 use crate::config::{Config, DbBackend};
 use crate::error::BridgeResult;
 use crate::models::{
-    AggregateStats, BatchIncrementEntry, EndMatchRequest, LeaderboardEntry, Match,
+    AggregateStats, BatchIncrementEntry, FinalizeMatchRequest, LeaderboardEntry, Match,
     MatchFactionScore, MatchListEntry, MatchPlayer, MatchSummary, PlayerRecord, StatDelta,
 };
 use async_trait::async_trait;
@@ -15,8 +15,6 @@ pub trait Store: Send + Sync {
         &self,
         uid: &str,
         last_known_name: &str,
-        match_id: Option<&str>,
-        faction: Option<&str>,
         delta: &StatDelta,
     ) -> BridgeResult<PlayerRecord>;
     async fn batch_upsert_increment(
@@ -32,19 +30,16 @@ pub trait Store: Send + Sync {
         search: Option<&str>,
     ) -> BridgeResult<(Vec<LeaderboardEntry>, i64)>;
 
-    // Match tracking ---------------------------------------------------------
-    async fn register_match(&self, m: &Match) -> BridgeResult<Match>;
-    async fn end_match(&self, id: &str, req: &EndMatchRequest) -> BridgeResult<Match>;
+    // Match tracking — only finished matches are persisted. The addon
+    // accumulates per-match data locally during play and posts the whole match
+    // in one atomic finalize call.
+    async fn finalize_match(&self, req: &FinalizeMatchRequest) -> BridgeResult<Match>;
     async fn list_matches(
         &self,
         limit: i64,
         offset: i64,
     ) -> BridgeResult<(Vec<MatchListEntry>, i64)>;
     async fn get_match_summary(&self, id: &str) -> BridgeResult<Option<MatchSummary>>;
-    /// Closes any matches with end_time IS NULL — called once at startup, on
-    /// the assumption that nothing besides this process can have written them.
-    /// Returns the number of rows updated.
-    async fn mark_abandoned_matches(&self) -> BridgeResult<u64>;
 }
 
 // Builds a case-insensitive LIKE pattern with `\` as the escape character.
@@ -92,19 +87,11 @@ impl Store for AnyStore {
         &self,
         uid: &str,
         last_known_name: &str,
-        match_id: Option<&str>,
-        faction: Option<&str>,
         delta: &StatDelta,
     ) -> BridgeResult<PlayerRecord> {
         match self {
-            AnyStore::Sqlite(s) => {
-                s.upsert_increment(uid, last_known_name, match_id, faction, delta)
-                    .await
-            }
-            AnyStore::Postgres(p) => {
-                p.upsert_increment(uid, last_known_name, match_id, faction, delta)
-                    .await
-            }
+            AnyStore::Sqlite(s) => s.upsert_increment(uid, last_known_name, delta).await,
+            AnyStore::Postgres(p) => p.upsert_increment(uid, last_known_name, delta).await,
         }
     }
     async fn batch_upsert_increment(
@@ -139,16 +126,10 @@ impl Store for AnyStore {
             AnyStore::Postgres(p) => p.leaderboard_paged(limit, offset, search).await,
         }
     }
-    async fn register_match(&self, m: &Match) -> BridgeResult<Match> {
+    async fn finalize_match(&self, req: &FinalizeMatchRequest) -> BridgeResult<Match> {
         match self {
-            AnyStore::Sqlite(s) => s.register_match(m).await,
-            AnyStore::Postgres(p) => p.register_match(m).await,
-        }
-    }
-    async fn end_match(&self, id: &str, req: &EndMatchRequest) -> BridgeResult<Match> {
-        match self {
-            AnyStore::Sqlite(s) => s.end_match(id, req).await,
-            AnyStore::Postgres(p) => p.end_match(id, req).await,
+            AnyStore::Sqlite(s) => s.finalize_match(req).await,
+            AnyStore::Postgres(p) => p.finalize_match(req).await,
         }
     }
     async fn list_matches(
@@ -165,12 +146,6 @@ impl Store for AnyStore {
         match self {
             AnyStore::Sqlite(s) => s.get_match_summary(id).await,
             AnyStore::Postgres(p) => p.get_match_summary(id).await,
-        }
-    }
-    async fn mark_abandoned_matches(&self) -> BridgeResult<u64> {
-        match self {
-            AnyStore::Sqlite(s) => s.mark_abandoned_matches().await,
-            AnyStore::Postgres(p) => p.mark_abandoned_matches().await,
         }
     }
 }
@@ -342,13 +317,10 @@ impl Store for SqliteStore {
         &self,
         uid: &str,
         last_known_name: &str,
-        match_id: Option<&str>,
-        faction: Option<&str>,
         delta: &StatDelta,
     ) -> BridgeResult<PlayerRecord> {
         let now = chrono::Utc::now();
-        let mut tx = self.pool.begin().await?;
-        sqlx::query(
+        let row = sqlx::query(
             r#"
             INSERT INTO players (player_uid, last_known_name, total_score, kills, ai_kills,
                                  deaths, objectives, playtime_seconds, first_seen, last_seen)
@@ -361,7 +333,9 @@ impl Store for SqliteStore {
                 deaths           = deaths           + excluded.deaths,
                 objectives       = objectives       + excluded.objectives,
                 playtime_seconds = playtime_seconds + excluded.playtime_seconds,
-                last_seen        = excluded.last_seen;
+                last_seen        = excluded.last_seen
+            RETURNING player_uid, last_known_name, total_score, kills, ai_kills, deaths,
+                      objectives, playtime_seconds, first_seen, last_seen;
             "#,
         )
         .bind(uid)
@@ -374,26 +348,9 @@ impl Store for SqliteStore {
         .bind(delta.playtime_seconds)
         .bind(now)
         .bind(now)
-        .execute(&mut *tx)
+        .fetch_one(&self.pool)
         .await?;
-
-        if let (Some(mid), Some(fac)) = (match_id, faction) {
-            if !mid.is_empty() && !fac.is_empty() {
-                sqlite_upsert_match_player(&mut tx, mid, uid, fac, last_known_name, delta).await?;
-            }
-        }
-
-        let row = sqlx::query(
-            "SELECT player_uid, last_known_name, total_score, kills, ai_kills, deaths,
-                    objectives, playtime_seconds, first_seen, last_seen
-             FROM players WHERE player_uid = ?",
-        )
-        .bind(uid)
-        .fetch_one(&mut *tx)
-        .await?;
-        let rec = sqlite_row_to_record(&row)?;
-        tx.commit().await?;
-        Ok(rec)
+        Ok(sqlite_row_to_record(&row)?)
     }
 
     async fn batch_upsert_increment(
@@ -434,20 +391,6 @@ impl Store for SqliteStore {
             .bind(now)
             .execute(&mut *tx)
             .await?;
-
-            if let (Some(mid), Some(fac)) = (e.match_id.as_deref(), e.faction.as_deref()) {
-                if !mid.is_empty() && !fac.is_empty() {
-                    sqlite_upsert_match_player(
-                        &mut tx,
-                        mid,
-                        &e.player_uid,
-                        fac,
-                        &e.last_known_name,
-                        &e.delta,
-                    )
-                    .await?;
-                }
-            }
         }
         tx.commit().await?;
         Ok(entries.len())
@@ -549,67 +492,84 @@ impl Store for SqliteStore {
         Ok((entries, total))
     }
 
-    async fn register_match(&self, m: &Match) -> BridgeResult<Match> {
-        // Upsert so this works even if a flush already lazy-created a stub
-        // matches row (race: batch_upsert_increment landed before /match did).
-        // We deliberately don't touch end_time / winning_faction / end_reason
-        // on conflict — those are owned by /match/:id/end and a stray re-
-        // register must not clobber them.
+    async fn finalize_match(&self, req: &FinalizeMatchRequest) -> BridgeResult<Match> {
+        let now = chrono::Utc::now();
+        let start_time = req.start_time.unwrap_or(now);
+        let end_time = req.end_time.unwrap_or(now);
+
+        let mut tx = self.pool.begin().await?;
+
+        // The matches row is full-overwritten on conflict — finalize is the
+        // authoritative write for a match (no live data can have created a
+        // partial row anymore).
         sqlx::query(
             r#"
             INSERT INTO matches (id, scenario, start_time, end_time, winning_faction, end_reason)
             VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
-                scenario   = excluded.scenario,
-                start_time = excluded.start_time;
+                scenario        = excluded.scenario,
+                start_time      = excluded.start_time,
+                end_time        = excluded.end_time,
+                winning_faction = excluded.winning_faction,
+                end_reason      = excluded.end_reason;
             "#,
         )
-        .bind(&m.id)
-        .bind(&m.scenario)
-        .bind(m.start_time)
-        .bind(m.end_time)
-        .bind(&m.winning_faction)
-        .bind(&m.end_reason)
-        .execute(&self.pool)
-        .await?;
-
-        let row = sqlx::query(
-            "SELECT id, scenario, start_time, end_time, winning_faction, end_reason
-             FROM matches WHERE id = ?",
-        )
-        .bind(&m.id)
-        .fetch_one(&self.pool)
-        .await?;
-        Ok(sqlite_row_to_match(&row)?)
-    }
-
-    async fn end_match(&self, id: &str, req: &EndMatchRequest) -> BridgeResult<Match> {
-        let end_time = req.end_time.unwrap_or_else(chrono::Utc::now);
-        sqlx::query(
-            r#"
-            UPDATE matches SET
-                end_time = ?,
-                winning_faction = ?,
-                end_reason = ?
-            WHERE id = ?
-            "#,
-        )
+        .bind(&req.id)
+        .bind(&req.scenario)
+        .bind(start_time)
         .bind(end_time)
         .bind(&req.winning_faction)
         .bind(&req.end_reason)
-        .bind(id)
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
+
+        for p in &req.players {
+            // Faction can theoretically be empty (player who never picked a
+            // side but somehow earned stats). Skip those — composite key
+            // requires a non-empty faction and we'd otherwise UPSERT them all
+            // into the same '' row.
+            if p.faction.is_empty() {
+                continue;
+            }
+            sqlx::query(
+                r#"
+                INSERT INTO match_players (match_id, player_uid, faction, last_known_name,
+                                           total_score, kills, ai_kills, deaths, objectives, playtime_seconds)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(match_id, player_uid, faction) DO UPDATE SET
+                    last_known_name  = excluded.last_known_name,
+                    total_score      = excluded.total_score,
+                    kills            = excluded.kills,
+                    ai_kills         = excluded.ai_kills,
+                    deaths           = excluded.deaths,
+                    objectives       = excluded.objectives,
+                    playtime_seconds = excluded.playtime_seconds;
+                "#,
+            )
+            .bind(&req.id)
+            .bind(&p.player_uid)
+            .bind(&p.faction)
+            .bind(&p.last_known_name)
+            .bind(p.total_score)
+            .bind(p.kills)
+            .bind(p.ai_kills)
+            .bind(p.deaths)
+            .bind(p.objectives)
+            .bind(p.playtime_seconds)
+            .execute(&mut *tx)
+            .await?;
+        }
 
         let row = sqlx::query(
             "SELECT id, scenario, start_time, end_time, winning_faction, end_reason
              FROM matches WHERE id = ?",
         )
-        .bind(id)
-        .fetch_optional(&self.pool)
-        .await?
-        .ok_or_else(|| crate::error::BridgeError::NotFound(id.to_string()))?;
-        Ok(sqlite_row_to_match(&row)?)
+        .bind(&req.id)
+        .fetch_one(&mut *tx)
+        .await?;
+        let m = sqlite_row_to_match(&row)?;
+        tx.commit().await?;
+        Ok(m)
     }
 
     async fn list_matches(
@@ -721,71 +681,6 @@ impl Store for SqliteStore {
             players,
         }))
     }
-
-    async fn mark_abandoned_matches(&self) -> BridgeResult<u64> {
-        let now = chrono::Utc::now();
-        let result = sqlx::query(
-            "UPDATE matches SET end_time = ?, end_reason = 'abandoned' WHERE end_time IS NULL",
-        )
-        .bind(now)
-        .execute(&self.pool)
-        .await?;
-        Ok(result.rows_affected())
-    }
-}
-
-async fn sqlite_upsert_match_player(
-    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
-    match_id: &str,
-    player_uid: &str,
-    faction: &str,
-    last_known_name: &str,
-    delta: &StatDelta,
-) -> BridgeResult<()> {
-    // Lazy stub for the matches row. If a flush lands before /match does, we
-    // need a parent row for the (deferred) FK; the addon's later /match POST
-    // upserts the real scenario + start_time over this stub.
-    let now = chrono::Utc::now();
-    sqlx::query(
-        r#"
-        INSERT INTO matches (id, scenario, start_time)
-        VALUES (?, '', ?)
-        ON CONFLICT(id) DO NOTHING;
-        "#,
-    )
-    .bind(match_id)
-    .bind(now)
-    .execute(&mut **tx)
-    .await?;
-
-    sqlx::query(
-        r#"
-        INSERT INTO match_players (match_id, player_uid, faction, last_known_name,
-                                   total_score, kills, ai_kills, deaths, objectives, playtime_seconds)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(match_id, player_uid, faction) DO UPDATE SET
-            last_known_name  = excluded.last_known_name,
-            total_score      = total_score      + excluded.total_score,
-            kills            = kills            + excluded.kills,
-            ai_kills         = ai_kills         + excluded.ai_kills,
-            deaths           = deaths           + excluded.deaths,
-            objectives       = objectives       + excluded.objectives,
-            playtime_seconds = playtime_seconds + excluded.playtime_seconds;
-        "#,
-    )
-    .bind(match_id)
-    .bind(player_uid)
-    .bind(faction)
-    .bind(last_known_name)
-    .bind(delta.total_score)
-    .bind(delta.kills)
-    .bind(delta.ai_kills)
-    .bind(delta.deaths)
-    .bind(delta.objectives)
-    .bind(delta.playtime_seconds)
-    .execute(&mut **tx)
-    .await?;
-    Ok(())
 }
 
 // ---------- Postgres ----------
@@ -935,12 +830,9 @@ impl Store for PostgresStore {
         &self,
         uid: &str,
         last_known_name: &str,
-        match_id: Option<&str>,
-        faction: Option<&str>,
         delta: &StatDelta,
     ) -> BridgeResult<PlayerRecord> {
         let now = chrono::Utc::now();
-        let mut tx = self.pool.begin().await?;
         let row = sqlx::query(
             r#"
             INSERT INTO players (player_uid, last_known_name, total_score, kills, ai_kills,
@@ -969,16 +861,8 @@ impl Store for PostgresStore {
         .bind(delta.playtime_seconds)
         .bind(now)
         .bind(now)
-        .fetch_one(&mut *tx)
+        .fetch_one(&self.pool)
         .await?;
-
-        if let (Some(mid), Some(fac)) = (match_id, faction) {
-            if !mid.is_empty() && !fac.is_empty() {
-                pg_upsert_match_player(&mut tx, mid, uid, fac, last_known_name, delta).await?;
-            }
-        }
-
-        tx.commit().await?;
         Ok(pg_row_to_record(&row)?)
     }
 
@@ -1020,20 +904,6 @@ impl Store for PostgresStore {
             .bind(now)
             .execute(&mut *tx)
             .await?;
-
-            if let (Some(mid), Some(fac)) = (e.match_id.as_deref(), e.faction.as_deref()) {
-                if !mid.is_empty() && !fac.is_empty() {
-                    pg_upsert_match_player(
-                        &mut tx,
-                        mid,
-                        &e.player_uid,
-                        fac,
-                        &e.last_known_name,
-                        &e.delta,
-                    )
-                    .await?;
-                }
-            }
         }
         tx.commit().await?;
         Ok(entries.len())
@@ -1134,56 +1004,77 @@ impl Store for PostgresStore {
         Ok((entries, total))
     }
 
-    async fn register_match(&self, m: &Match) -> BridgeResult<Match> {
-        // Upsert — see SqliteStore::register_match for the full reasoning.
+    async fn finalize_match(&self, req: &FinalizeMatchRequest) -> BridgeResult<Match> {
+        let now = chrono::Utc::now();
+        let start_time = req.start_time.unwrap_or(now);
+        let end_time = req.end_time.unwrap_or(now);
+
+        let mut tx = self.pool.begin().await?;
+
         sqlx::query(
             r#"
             INSERT INTO matches (id, scenario, start_time, end_time, winning_faction, end_reason)
             VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (id) DO UPDATE SET
-                scenario   = EXCLUDED.scenario,
-                start_time = EXCLUDED.start_time
+                scenario        = EXCLUDED.scenario,
+                start_time      = EXCLUDED.start_time,
+                end_time        = EXCLUDED.end_time,
+                winning_faction = EXCLUDED.winning_faction,
+                end_reason      = EXCLUDED.end_reason
             "#,
         )
-        .bind(&m.id)
-        .bind(&m.scenario)
-        .bind(m.start_time)
-        .bind(m.end_time)
-        .bind(&m.winning_faction)
-        .bind(&m.end_reason)
-        .execute(&self.pool)
+        .bind(&req.id)
+        .bind(&req.scenario)
+        .bind(start_time)
+        .bind(end_time)
+        .bind(&req.winning_faction)
+        .bind(&req.end_reason)
+        .execute(&mut *tx)
         .await?;
+
+        for p in &req.players {
+            if p.faction.is_empty() {
+                continue;
+            }
+            sqlx::query(
+                r#"
+                INSERT INTO match_players (match_id, player_uid, faction, last_known_name,
+                                           total_score, kills, ai_kills, deaths, objectives, playtime_seconds)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                ON CONFLICT (match_id, player_uid, faction) DO UPDATE SET
+                    last_known_name  = EXCLUDED.last_known_name,
+                    total_score      = EXCLUDED.total_score,
+                    kills            = EXCLUDED.kills,
+                    ai_kills         = EXCLUDED.ai_kills,
+                    deaths           = EXCLUDED.deaths,
+                    objectives       = EXCLUDED.objectives,
+                    playtime_seconds = EXCLUDED.playtime_seconds;
+                "#,
+            )
+            .bind(&req.id)
+            .bind(&p.player_uid)
+            .bind(&p.faction)
+            .bind(&p.last_known_name)
+            .bind(p.total_score)
+            .bind(p.kills)
+            .bind(p.ai_kills)
+            .bind(p.deaths)
+            .bind(p.objectives)
+            .bind(p.playtime_seconds)
+            .execute(&mut *tx)
+            .await?;
+        }
 
         let row = sqlx::query(
             "SELECT id, scenario, start_time, end_time, winning_faction, end_reason
              FROM matches WHERE id = $1",
         )
-        .bind(&m.id)
-        .fetch_one(&self.pool)
+        .bind(&req.id)
+        .fetch_one(&mut *tx)
         .await?;
-        Ok(pg_row_to_match(&row)?)
-    }
-
-    async fn end_match(&self, id: &str, req: &EndMatchRequest) -> BridgeResult<Match> {
-        let end_time = req.end_time.unwrap_or_else(chrono::Utc::now);
-        let row = sqlx::query(
-            r#"
-            UPDATE matches SET
-                end_time = $1,
-                winning_faction = $2,
-                end_reason = $3
-            WHERE id = $4
-            RETURNING id, scenario, start_time, end_time, winning_faction, end_reason
-            "#,
-        )
-        .bind(end_time)
-        .bind(&req.winning_faction)
-        .bind(&req.end_reason)
-        .bind(id)
-        .fetch_optional(&self.pool)
-        .await?
-        .ok_or_else(|| crate::error::BridgeError::NotFound(id.to_string()))?;
-        Ok(pg_row_to_match(&row)?)
+        let m = pg_row_to_match(&row)?;
+        tx.commit().await?;
+        Ok(m)
     }
 
     async fn list_matches(
@@ -1295,68 +1186,4 @@ impl Store for PostgresStore {
             players,
         }))
     }
-
-    async fn mark_abandoned_matches(&self) -> BridgeResult<u64> {
-        let now = chrono::Utc::now();
-        let result = sqlx::query(
-            "UPDATE matches SET end_time = $1, end_reason = 'abandoned' WHERE end_time IS NULL",
-        )
-        .bind(now)
-        .execute(&self.pool)
-        .await?;
-        Ok(result.rows_affected())
-    }
-}
-
-async fn pg_upsert_match_player(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    match_id: &str,
-    player_uid: &str,
-    faction: &str,
-    last_known_name: &str,
-    delta: &StatDelta,
-) -> BridgeResult<()> {
-    // Lazy stub for the matches row — see sqlite_upsert_match_player for why.
-    // Without this, Postgres would reject the match_players insert on its FK.
-    let now = chrono::Utc::now();
-    sqlx::query(
-        r#"
-        INSERT INTO matches (id, scenario, start_time)
-        VALUES ($1, '', $2)
-        ON CONFLICT (id) DO NOTHING
-        "#,
-    )
-    .bind(match_id)
-    .bind(now)
-    .execute(&mut **tx)
-    .await?;
-
-    sqlx::query(
-        r#"
-        INSERT INTO match_players (match_id, player_uid, faction, last_known_name,
-                                   total_score, kills, ai_kills, deaths, objectives, playtime_seconds)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-        ON CONFLICT (match_id, player_uid, faction) DO UPDATE SET
-            last_known_name  = EXCLUDED.last_known_name,
-            total_score      = match_players.total_score      + EXCLUDED.total_score,
-            kills            = match_players.kills            + EXCLUDED.kills,
-            ai_kills         = match_players.ai_kills         + EXCLUDED.ai_kills,
-            deaths           = match_players.deaths           + EXCLUDED.deaths,
-            objectives       = match_players.objectives       + EXCLUDED.objectives,
-            playtime_seconds = match_players.playtime_seconds + EXCLUDED.playtime_seconds;
-        "#,
-    )
-    .bind(match_id)
-    .bind(player_uid)
-    .bind(faction)
-    .bind(last_known_name)
-    .bind(delta.total_score)
-    .bind(delta.kills)
-    .bind(delta.ai_kills)
-    .bind(delta.deaths)
-    .bind(delta.objectives)
-    .bind(delta.playtime_seconds)
-    .execute(&mut **tx)
-    .await?;
-    Ok(())
 }
