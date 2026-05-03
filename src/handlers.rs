@@ -1,6 +1,9 @@
 use crate::db::{AnyStore, Store};
 use crate::error::{BridgeError, BridgeResult};
-use crate::models::{BatchIncrementRequest, IncrementRequest, PlayerRecord};
+use crate::models::{
+    BatchIncrementRequest, EndMatchRequest, IncrementRequest, Match, PlayerRecord,
+    RegisterMatchRequest,
+};
 use axum::{
     body::Bytes,
     extract::{Path, Query, State},
@@ -109,7 +112,13 @@ pub async fn upsert_player(
     }
     let rec = state
         .store
-        .upsert_increment(&uid, &req.last_known_name, &req.delta)
+        .upsert_increment(
+            &uid,
+            &req.last_known_name,
+            req.match_id.as_deref(),
+            req.faction.as_deref(),
+            &req.delta,
+        )
         .await?;
     Ok(Json(rec))
 }
@@ -216,4 +225,91 @@ pub async fn api_player(
         .await?
         .ok_or_else(|| BridgeError::NotFound(uid.clone()))?;
     Ok(Json(rec))
+}
+
+// -----------------------------------------------------------------------------
+// Match endpoints
+// -----------------------------------------------------------------------------
+
+// POST /match — auth-gated. Idempotent: re-registering an existing id is a no-op
+// that returns the stored row (so addon retries never error).
+pub async fn register_match(
+    State(state): State<SharedState>,
+    headers: HeaderMap,
+    Query(auth): Query<AuthQuery>,
+    body: Bytes,
+) -> BridgeResult<Json<Match>> {
+    check_auth(&headers, auth.api_key.as_deref(), &state.api_key)?;
+    let req: RegisterMatchRequest = serde_json::from_slice(&body)
+        .map_err(|e| BridgeError::BadRequest(format!("invalid JSON body: {e}")))?;
+    if req.id.trim().is_empty() {
+        return Err(BridgeError::BadRequest("id is empty".into()));
+    }
+    if req.scenario.trim().is_empty() {
+        return Err(BridgeError::BadRequest("scenario is empty".into()));
+    }
+    let m = Match {
+        id: req.id,
+        scenario: req.scenario,
+        start_time: req.start_time.unwrap_or_else(chrono::Utc::now),
+        end_time: None,
+        winning_faction: None,
+        end_reason: None,
+    };
+    let stored = state.store.register_match(&m).await?;
+    Ok(Json(stored))
+}
+
+// POST /match/:id/end — auth-gated. Sets end_time, winning_faction, end_reason.
+pub async fn end_match(
+    State(state): State<SharedState>,
+    headers: HeaderMap,
+    Query(auth): Query<AuthQuery>,
+    Path(id): Path<String>,
+    body: Bytes,
+) -> BridgeResult<Json<Match>> {
+    check_auth(&headers, auth.api_key.as_deref(), &state.api_key)?;
+    let req: EndMatchRequest = serde_json::from_slice(&body)
+        .map_err(|e| BridgeError::BadRequest(format!("invalid JSON body: {e}")))?;
+    let stored = state.store.end_match(&id, &req).await?;
+    Ok(Json(stored))
+}
+
+#[derive(Deserialize)]
+pub struct ApiMatchesQuery {
+    #[serde(default = "default_api_limit")]
+    pub limit: i64,
+    #[serde(default)]
+    pub offset: i64,
+}
+
+// Public — for dashboard. Recent matches with per-match aggregates.
+pub async fn api_matches(
+    State(state): State<SharedState>,
+    Query(q): Query<ApiMatchesQuery>,
+) -> BridgeResult<Json<serde_json::Value>> {
+    let limit = q.limit.clamp(1, 100);
+    let offset = q.offset.max(0);
+    let (entries, total) = state.store.list_matches(limit, offset).await?;
+    Ok(Json(serde_json::json!({
+        "entries": entries,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    })))
+}
+
+// Public — for dashboard. Single match with per-faction aggregates and roster.
+pub async fn api_match(
+    State(state): State<SharedState>,
+    Path(id): Path<String>,
+) -> BridgeResult<Json<serde_json::Value>> {
+    let summary = state
+        .store
+        .get_match_summary(&id)
+        .await?
+        .ok_or_else(|| BridgeError::NotFound(id.clone()))?;
+    Ok(Json(serde_json::to_value(summary).map_err(|e| {
+        BridgeError::Internal(anyhow::anyhow!("serialize match summary: {e}"))
+    })?))
 }

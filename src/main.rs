@@ -43,6 +43,14 @@ async fn main() -> Result<()> {
     store.migrate().await?;
     tracing::info!("database ready");
 
+    // Anything still open in `matches` at startup belongs to a previous server
+    // process — by definition it didn't get cleanly ended. Stamp them as
+    // abandoned so the dashboard doesn't show them as live forever.
+    let closed = store.mark_abandoned_matches().await?;
+    if closed > 0 {
+        tracing::info!("marked {closed} previously-open match(es) as abandoned");
+    }
+
     let dashboard_html =
         handlers::render_dashboard_html(&cfg.dashboard.title, &cfg.dashboard.subtitle);
 
@@ -57,11 +65,15 @@ async fn main() -> Result<()> {
         .route("/api/stats", get(handlers::api_stats))
         .route("/api/leaderboard", get(handlers::api_leaderboard))
         .route("/api/player/:uid", get(handlers::api_player))
+        .route("/api/matches", get(handlers::api_matches))
+        .route("/api/match/:id", get(handlers::api_match))
         .route("/health", get(handlers::health))
         .route("/player/:uid", get(handlers::get_player))
         .route("/player/:uid/increment", post(handlers::upsert_player))
         .route("/player/batch-increment", post(handlers::batch_increment))
         .route("/leaderboard", get(handlers::leaderboard))
+        .route("/match", post(handlers::register_match))
+        .route("/match/:id/end", post(handlers::end_match))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 

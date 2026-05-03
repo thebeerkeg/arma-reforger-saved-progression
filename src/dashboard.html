@@ -38,49 +38,102 @@
       </div>
     </header>
 
-    <section id="tiles" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8"></section>
+    <nav class="mb-6 flex items-center gap-2 border-b border-tbk-border">
+      <button data-tab="players" class="tab-btn px-4 py-2 text-sm border-b-2 border-tbk-accent text-white">
+        Players
+      </button>
+      <button data-tab="matches" class="tab-btn px-4 py-2 text-sm border-b-2 border-transparent text-slate-400 hover:text-white">
+        Matches
+      </button>
+    </nav>
 
-    <section class="bg-tbk-panel border border-tbk-border rounded-lg overflow-hidden">
-      <div class="px-4 py-3 border-b border-tbk-border flex items-center justify-between gap-3 flex-wrap">
-        <h2 class="font-semibold text-white">Leaderboard</h2>
-        <input id="search" type="search" placeholder="Search players…" autocomplete="off"
-          class="px-3 py-1.5 text-sm rounded-md bg-tbk-bg border border-tbk-border placeholder:text-slate-500 focus:border-tbk-accent focus:outline-none w-48 sm:w-64" />
-      </div>
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead class="text-left text-xs uppercase tracking-wider text-slate-400 bg-black/20">
-            <tr>
-              <th class="px-4 py-2 w-12">#</th>
-              <th class="px-4 py-2">Player</th>
-              <th class="px-4 py-2 text-right">Score</th>
-              <th class="px-4 py-2 text-right">Kills</th>
-              <th class="px-4 py-2 text-right">Deaths</th>
-            </tr>
-          </thead>
-          <tbody id="lb-body" class="divide-y divide-tbk-border">
-            <tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Loading…</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="px-4 py-3 border-t border-tbk-border flex items-center justify-between gap-3 flex-wrap">
-        <span id="lb-count" class="text-xs text-slate-500"></span>
-        <div class="flex items-center gap-2">
-          <button id="prev"
-            class="px-3 py-1 text-sm rounded-md bg-tbk-bg border border-tbk-border hover:border-tbk-accent hover:text-tbk-accent disabled:opacity-40 disabled:hover:border-tbk-border disabled:hover:text-slate-200 transition">
-            Prev
-          </button>
-          <span id="page-info" class="text-xs text-slate-400 tabular-nums min-w-[6rem] text-center"></span>
-          <button id="next"
-            class="px-3 py-1 text-sm rounded-md bg-tbk-bg border border-tbk-border hover:border-tbk-accent hover:text-tbk-accent disabled:opacity-40 disabled:hover:border-tbk-border disabled:hover:text-slate-200 transition">
-            Next
-          </button>
+    <!-- ===== Players tab ===== -->
+    <div id="tab-players">
+      <section id="tiles" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8"></section>
+
+      <section class="bg-tbk-panel border border-tbk-border rounded-lg overflow-hidden">
+        <div class="px-4 py-3 border-b border-tbk-border flex items-center justify-between gap-3 flex-wrap">
+          <h2 class="font-semibold text-white">Leaderboard</h2>
+          <input id="search" type="search" placeholder="Search players…" autocomplete="off"
+            class="px-3 py-1.5 text-sm rounded-md bg-tbk-bg border border-tbk-border placeholder:text-slate-500 focus:border-tbk-accent focus:outline-none w-48 sm:w-64" />
         </div>
-      </div>
-    </section>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="text-left text-xs uppercase tracking-wider text-slate-400 bg-black/20">
+              <tr>
+                <th class="px-4 py-2 w-12">#</th>
+                <th class="px-4 py-2">Player</th>
+                <th class="px-4 py-2 text-right">Score</th>
+                <th class="px-4 py-2 text-right">Kills</th>
+                <th class="px-4 py-2 text-right">Deaths</th>
+              </tr>
+            </thead>
+            <tbody id="lb-body" class="divide-y divide-tbk-border">
+              <tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="px-4 py-3 border-t border-tbk-border flex items-center justify-between gap-3 flex-wrap">
+          <span id="lb-count" class="text-xs text-slate-500"></span>
+          <div class="flex items-center gap-2">
+            <button id="prev"
+              class="px-3 py-1 text-sm rounded-md bg-tbk-bg border border-tbk-border hover:border-tbk-accent hover:text-tbk-accent disabled:opacity-40 disabled:hover:border-tbk-border disabled:hover:text-slate-200 transition">
+              Prev
+            </button>
+            <span id="page-info" class="text-xs text-slate-400 tabular-nums min-w-[6rem] text-center"></span>
+            <button id="next"
+              class="px-3 py-1 text-sm rounded-md bg-tbk-bg border border-tbk-border hover:border-tbk-accent hover:text-tbk-accent disabled:opacity-40 disabled:hover:border-tbk-border disabled:hover:text-slate-200 transition">
+              Next
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ===== Matches tab ===== -->
+    <div id="tab-matches" class="hidden">
+      <section class="bg-tbk-panel border border-tbk-border rounded-lg overflow-hidden">
+        <div class="px-4 py-3 border-b border-tbk-border flex items-center justify-between gap-3 flex-wrap">
+          <h2 class="font-semibold text-white">Recent Matches</h2>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="text-left text-xs uppercase tracking-wider text-slate-400 bg-black/20">
+              <tr>
+                <th class="px-4 py-2">Started</th>
+                <th class="px-4 py-2">Scenario</th>
+                <th class="px-4 py-2">Winner</th>
+                <th class="px-4 py-2 text-right">Players</th>
+                <th class="px-4 py-2 text-right">Score</th>
+                <th class="px-4 py-2">Result</th>
+              </tr>
+            </thead>
+            <tbody id="m-body" class="divide-y divide-tbk-border">
+              <tr><td colspan="6" class="px-4 py-6 text-center text-slate-500">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="px-4 py-3 border-t border-tbk-border flex items-center justify-between gap-3 flex-wrap">
+          <span id="m-count" class="text-xs text-slate-500"></span>
+          <div class="flex items-center gap-2">
+            <button id="m-prev"
+              class="px-3 py-1 text-sm rounded-md bg-tbk-bg border border-tbk-border hover:border-tbk-accent hover:text-tbk-accent disabled:opacity-40 disabled:hover:border-tbk-border disabled:hover:text-slate-200 transition">
+              Prev
+            </button>
+            <span id="m-page-info" class="text-xs text-slate-400 tabular-nums min-w-[6rem] text-center"></span>
+            <button id="m-next"
+              class="px-3 py-1 text-sm rounded-md bg-tbk-bg border border-tbk-border hover:border-tbk-accent hover:text-tbk-accent disabled:opacity-40 disabled:hover:border-tbk-border disabled:hover:text-slate-200 transition">
+              Next
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
 
     <p id="error" class="hidden mt-4 text-sm text-red-400"></p>
   </div>
 
+  <!-- Player detail modal -->
   <div id="modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
     <div id="modal-backdrop" class="absolute inset-0 bg-black/70"></div>
     <div class="relative bg-tbk-panel border border-tbk-border rounded-lg shadow-xl w-full max-w-lg">
@@ -96,6 +149,22 @@
     </div>
   </div>
 
+  <!-- Match detail modal -->
+  <div id="m-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div id="m-modal-backdrop" class="absolute inset-0 bg-black/70"></div>
+    <div class="relative bg-tbk-panel border border-tbk-border rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-tbk-border sticky top-0 bg-tbk-panel">
+        <h3 id="m-modal-title" class="font-semibold text-white truncate">Match</h3>
+        <button id="m-modal-close"
+          class="text-slate-400 hover:text-white text-xl leading-none px-2"
+          aria-label="Close">&times;</button>
+      </div>
+      <div id="m-modal-body" class="p-5 text-sm">
+        <div class="text-slate-500">Loading…</div>
+      </div>
+    </div>
+  </div>
+
 <script>
   const fmtInt = (n) => Number(n).toLocaleString();
   const fmtPlaytime = (s) => {
@@ -106,6 +175,18 @@
     if (d > 0) return `${d}d ${h}h`;
     if (h > 0) return `${h}h ${m}m`;
     return `${m}m`;
+  };
+  const fmtDate = (s) => {
+    if (!s) return '—';
+    const d = new Date(s);
+    return isNaN(d) ? String(s) : d.toLocaleString();
+  };
+  const fmtDuration = (start, end) => {
+    if (!start || !end) return '—';
+    const a = new Date(start), b = new Date(end);
+    if (isNaN(a) || isNaN(b)) return '—';
+    const sec = Math.max(0, Math.floor((b - a) / 1000));
+    return fmtPlaytime(sec);
   };
   const escapeHtml = (s) =>
     String(s).replace(/[&<>"']/g, (c) => ({
@@ -131,6 +212,27 @@
     `).join('');
     document.getElementById('tiles').innerHTML = html;
   }
+
+  // ---- tab switching ----
+  let activeTab = 'players';
+  function setTab(name) {
+    activeTab = name;
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      const on = btn.dataset.tab === name;
+      btn.classList.toggle('border-tbk-accent', on);
+      btn.classList.toggle('text-white', on);
+      btn.classList.toggle('border-transparent', !on);
+      btn.classList.toggle('text-slate-400', !on);
+    });
+    document.getElementById('tab-players').classList.toggle('hidden', name !== 'players');
+    document.getElementById('tab-matches').classList.toggle('hidden', name !== 'matches');
+    if (name === 'matches' && !matchesState.loaded) {
+      loadMatches();
+    }
+  }
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => setTab(btn.dataset.tab));
+  });
 
   const PAGE_SIZE = 25;
   const state = { page: 0, search: '', total: 0 };
@@ -186,10 +288,6 @@
   }
 
   function renderPlayer(p) {
-    const fmtDate = (s) => {
-      const d = new Date(s);
-      return isNaN(d) ? String(s) : d.toLocaleString();
-    };
     const rows = [
       ['Player UID',  p.player_uid,                              'font-mono text-xs break-all'],
       ['Total Score', fmtInt(p.total_score),                     'tabular-nums'],
@@ -242,6 +340,219 @@
     if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
   });
 
+  // ---- matches list ----
+  const matchesState = { page: 0, total: 0, loaded: false };
+
+  // The "Result" badge — the addon may end matches with `victory`, `draw`,
+  // `abandoned`, `timeout`, or anything else. Color the common cases; leave
+  // unknown values neutral so a custom end_reason still renders intelligibly.
+  function resultBadge(m) {
+    if (!m.end_time) {
+      return `<span class="px-2 py-0.5 text-xs rounded bg-yellow-500/15 text-yellow-300 border border-yellow-500/30">live</span>`;
+    }
+    const r = (m.end_reason || '').toLowerCase();
+    const cls = (
+      r === 'victory' ? 'bg-green-500/15 text-green-300 border-green-500/30' :
+      r === 'draw'    ? 'bg-slate-500/15 text-slate-300 border-slate-500/30' :
+      r === 'abandoned' ? 'bg-red-500/15 text-red-300 border-red-500/30' :
+      'bg-slate-500/15 text-slate-300 border-slate-500/30'
+    );
+    return `<span class="px-2 py-0.5 text-xs rounded border ${cls}">${escapeHtml(m.end_reason || 'ended')}</span>`;
+  }
+
+  function renderMatches(rows, total, offset) {
+    const body = document.getElementById('m-body');
+    matchesState.total = total;
+
+    if (!rows.length) {
+      body.innerHTML = `<tr><td colspan="6" class="px-4 py-6 text-center text-slate-500">No matches yet.</td></tr>`;
+    } else {
+      body.innerHTML = rows.map(m => `
+        <tr data-id="${escapeHtml(m.id)}" class="cursor-pointer hover:bg-black/30 transition-colors">
+          <td class="px-4 py-2 text-slate-300">${escapeHtml(fmtDate(m.start_time))}</td>
+          <td class="px-4 py-2 text-white">${escapeHtml(m.scenario)}</td>
+          <td class="px-4 py-2 text-white">${escapeHtml(m.winning_faction || '—')}</td>
+          <td class="px-4 py-2 text-right tabular-nums">${fmtInt(m.player_count)}</td>
+          <td class="px-4 py-2 text-right tabular-nums">${fmtInt(m.total_score)}</td>
+          <td class="px-4 py-2">${resultBadge(m)}</td>
+        </tr>
+      `).join('');
+    }
+
+    const from = total === 0 ? 0 : offset + 1;
+    const to = offset + rows.length;
+    document.getElementById('m-count').textContent = total === 0
+      ? '0 matches'
+      : `Showing ${fmtInt(from)}–${fmtInt(to)} of ${fmtInt(total)}`;
+
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const currentPage = Math.min(matchesState.page, totalPages - 1);
+    document.getElementById('m-page-info').textContent = `Page ${currentPage + 1} / ${totalPages}`;
+    document.getElementById('m-prev').disabled = currentPage <= 0;
+    document.getElementById('m-next').disabled = currentPage >= totalPages - 1;
+  }
+
+  async function loadMatches() {
+    const params = new URLSearchParams({
+      limit: String(PAGE_SIZE),
+      offset: String(matchesState.page * PAGE_SIZE),
+    });
+    const res = await fetch(`/api/matches?${params}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    matchesState.loaded = true;
+    renderMatches(data.entries || [], data.total || 0, data.offset || 0);
+  }
+
+  // ---- match detail modal ----
+  const mModal = document.getElementById('m-modal');
+  const mModalBody = document.getElementById('m-modal-body');
+  const mModalTitle = document.getElementById('m-modal-title');
+  function openMatchModal() {
+    mModal.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+  }
+  function closeMatchModal() {
+    mModal.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+    mModalBody.innerHTML = '<div class="text-slate-500">Loading…</div>';
+  }
+
+  function renderMatchSummary(s) {
+    const meta = [
+      ['Match ID',     s.id,                                       'font-mono text-xs break-all'],
+      ['Scenario',     s.scenario,                                 ''],
+      ['Started',      fmtDate(s.start_time),                      ''],
+      ['Ended',        fmtDate(s.end_time),                        ''],
+      ['Duration',     fmtDuration(s.start_time, s.end_time),      'tabular-nums'],
+      ['Winner',       s.winning_faction || '—',                   ''],
+      ['Result',       s.end_reason || (s.end_time ? 'ended' : 'live'), ''],
+    ];
+
+    const factionRows = (s.factions || []).map(f => `
+      <tr>
+        <td class="px-3 py-1.5 text-white">${escapeHtml(f.faction)}</td>
+        <td class="px-3 py-1.5 text-right tabular-nums">${fmtInt(f.total_score)}</td>
+        <td class="px-3 py-1.5 text-right tabular-nums">${fmtInt(f.kills)}</td>
+        <td class="px-3 py-1.5 text-right tabular-nums">${fmtInt(f.deaths)}</td>
+        <td class="px-3 py-1.5 text-right tabular-nums">${fmtInt(f.player_count)}</td>
+      </tr>
+    `).join('');
+
+    const playerRows = (s.players || []).map(p => `
+      <tr>
+        <td class="px-3 py-1.5 text-white">${escapeHtml(p.last_known_name)}</td>
+        <td class="px-3 py-1.5 text-slate-300">${escapeHtml(p.faction)}</td>
+        <td class="px-3 py-1.5 text-right tabular-nums">${fmtInt(p.total_score)}</td>
+        <td class="px-3 py-1.5 text-right tabular-nums">${fmtInt(p.kills)}</td>
+        <td class="px-3 py-1.5 text-right tabular-nums">${fmtInt(p.ai_kills)}</td>
+        <td class="px-3 py-1.5 text-right tabular-nums">${fmtInt(p.deaths)}</td>
+        <td class="px-3 py-1.5 text-right tabular-nums">${fmtInt(p.objectives)}</td>
+      </tr>
+    `).join('');
+
+    mModalBody.innerHTML = `
+      <section class="mb-5">
+        <h4 class="text-xs uppercase tracking-wider text-slate-400 mb-2">Overview</h4>
+        <dl class="divide-y divide-tbk-border bg-tbk-bg/40 border border-tbk-border rounded-md">
+          ${meta.map(([k, v, cls]) => `
+            <div class="grid grid-cols-3 gap-3 py-2 px-3">
+              <dt class="text-slate-400">${k}</dt>
+              <dd class="col-span-2 text-white ${cls}">${escapeHtml(v)}</dd>
+            </div>
+          `).join('')}
+        </dl>
+      </section>
+
+      <section class="mb-5">
+        <h4 class="text-xs uppercase tracking-wider text-slate-400 mb-2">Factions</h4>
+        ${factionRows ? `
+          <div class="overflow-x-auto bg-tbk-bg/40 border border-tbk-border rounded-md">
+            <table class="w-full text-sm">
+              <thead class="text-left text-xs uppercase tracking-wider text-slate-400 bg-black/20">
+                <tr>
+                  <th class="px-3 py-1.5">Faction</th>
+                  <th class="px-3 py-1.5 text-right">Score</th>
+                  <th class="px-3 py-1.5 text-right">Kills</th>
+                  <th class="px-3 py-1.5 text-right">Deaths</th>
+                  <th class="px-3 py-1.5 text-right">Players</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-tbk-border">${factionRows}</tbody>
+            </table>
+          </div>
+        ` : `<div class="text-slate-500 text-sm">No faction data.</div>`}
+      </section>
+
+      <section>
+        <h4 class="text-xs uppercase tracking-wider text-slate-400 mb-2">Players</h4>
+        ${playerRows ? `
+          <div class="overflow-x-auto bg-tbk-bg/40 border border-tbk-border rounded-md">
+            <table class="w-full text-sm">
+              <thead class="text-left text-xs uppercase tracking-wider text-slate-400 bg-black/20">
+                <tr>
+                  <th class="px-3 py-1.5">Player</th>
+                  <th class="px-3 py-1.5">Faction</th>
+                  <th class="px-3 py-1.5 text-right">Score</th>
+                  <th class="px-3 py-1.5 text-right">Kills</th>
+                  <th class="px-3 py-1.5 text-right">AI Kills</th>
+                  <th class="px-3 py-1.5 text-right">Deaths</th>
+                  <th class="px-3 py-1.5 text-right">Obj</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-tbk-border">${playerRows}</tbody>
+            </table>
+          </div>
+        ` : `<div class="text-slate-500 text-sm">No roster data.</div>`}
+      </section>
+    `;
+  }
+
+  async function showMatch(id) {
+    mModalTitle.textContent = id;
+    mModalBody.innerHTML = '<div class="text-slate-500">Loading…</div>';
+    openMatchModal();
+    try {
+      const res = await fetch(`/api/match/${encodeURIComponent(id)}`, { cache: 'no-store' });
+      if (res.status === 404) {
+        mModalBody.innerHTML = '<div class="text-slate-500">Match not found.</div>';
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const s = await res.json();
+      mModalTitle.textContent = `${s.scenario}`;
+      renderMatchSummary(s);
+    } catch (e) {
+      mModalBody.innerHTML = `<div class="text-red-400">Failed to load: ${escapeHtml(e.message)}</div>`;
+    }
+  }
+
+  document.getElementById('m-body').addEventListener('click', (e) => {
+    const row = e.target.closest('tr[data-id]');
+    if (!row) return;
+    showMatch(row.dataset.id);
+  });
+  document.getElementById('m-modal-close').addEventListener('click', closeMatchModal);
+  document.getElementById('m-modal-backdrop').addEventListener('click', closeMatchModal);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !mModal.classList.contains('hidden')) closeMatchModal();
+  });
+
+  document.getElementById('m-prev').addEventListener('click', () => {
+    if (matchesState.page > 0) {
+      matchesState.page--;
+      loadMatches();
+    }
+  });
+  document.getElementById('m-next').addEventListener('click', () => {
+    const totalPages = Math.max(1, Math.ceil(matchesState.total / PAGE_SIZE));
+    if (matchesState.page < totalPages - 1) {
+      matchesState.page++;
+      loadMatches();
+    }
+  });
+
+  // ---- bootstrapping ----
   async function loadAggregate() {
     const res = await fetch('/api/stats', { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -265,7 +576,9 @@
     const err = document.getElementById('error');
     err.classList.add('hidden');
     try {
-      await Promise.all([loadAggregate(), loadLeaderboard()]);
+      const tasks = [loadAggregate(), loadLeaderboard()];
+      if (activeTab === 'matches') tasks.push(loadMatches());
+      await Promise.all(tasks);
       document.getElementById('updated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
     } catch (e) {
       err.textContent = `Failed to load stats: ${e.message}`;
