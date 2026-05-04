@@ -191,3 +191,9 @@ In both cases the addon authenticates via the `?api_key=` query-param form (see 
 - `cargo check` — fast type-check.
 - `cargo build --release` — optimized binary at `target/release/tbk-progression-bridge[.exe]`.
 - See `.gitignore` for the full list of ignored paths. Notable: build output (`target/`, `Cargo.lock`), local databases (`*.db*`), and anything containing secrets (`config.toml`, `.env`, `nginx/user_conf.d/bridge.conf`).
+
+## Screenshots
+
+![Leaderboard view with aggregate stat tiles and a searchable player table](screenshots/leaderboard.png)
+
+![Player detail modal showing per-player score, kills, AI kills, deaths, objectives, playtime, and first/last seen timestamps](screenshots/player-stats.png)
