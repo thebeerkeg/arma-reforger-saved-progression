@@ -1,4 +1,4 @@
-# TBK Progression Bridge configuration
+# TBK Custom Ranks Bridge configuration
 # Place this file next to the executable, or pass --config <path>
 
 [server]
@@ -15,10 +15,10 @@ api_key = "CHANGE_ME"
 backend = "sqlite"
 
 # For sqlite: a file path. The file is created on first run.
-sqlite_path = "tbk_progression.db"
+sqlite_path = "tbk_custom_ranks.db"
 
 # For postgres: a libpq-style connection string.
-# Example: "postgres://tbk:secret@localhost:5432/tbk_progression"
+# Example: "postgres://tbk:secret@localhost:5432/tbk_custom_ranks"
 postgres_url = ""
 
 # Maximum number of pooled DB connections.
@@ -27,5 +27,5 @@ max_connections = 10
 # The web dashboard (GET /) shows aggregate stats and the leaderboard.
 # Both fields are optional — if you omit the section, the defaults below are used.
 [dashboard]
-title = "TBK Saved Progression"
-subtitle = "Live stats from the TBK Saved Progression bridge"
+title = "TBK Custom Ranks Bridge"
+subtitle = "Live stats from the TBK Custom Ranks Bridge"

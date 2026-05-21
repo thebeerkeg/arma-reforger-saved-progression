@@ -49,11 +49,11 @@ fn default_max_conns() -> u32 {
 }
 
 fn default_dashboard_title() -> String {
-    "TBK Progression".to_string()
+    "TBK Custom Ranks Bridge".to_string()
 }
 
 fn default_dashboard_subtitle() -> String {
-    "Live stats from the Saved Progression bridge".to_string()
+    "Live stats from the TBK Custom Ranks Bridge".to_string()
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]

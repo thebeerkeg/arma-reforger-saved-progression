@@ -1,4 +1,4 @@
-# TBK Progression Bridge — smoke test
+# TBK Custom Ranks Bridge — smoke test
 #
 # Usage:
 #   .\Tools\smoke-test.ps1 -ApiKey "your-api-key-here"

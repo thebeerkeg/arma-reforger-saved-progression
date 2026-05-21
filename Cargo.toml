@@ -1,8 +1,8 @@
 [package]
-name = "tbk-progression-bridge"
+name = "tbk-custom-ranks-bridge"
 version = "0.1.0"
 edition = "2021"
-description = "Bridge service for TBK Saved Progression Arma Reforger addon"
+description = "Bridge service for the TBK Custom Ranks Arma Reforger addon"
 
 [dependencies]
 axum = "0.7"

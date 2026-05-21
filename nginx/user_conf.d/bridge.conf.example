@@ -1,4 +1,4 @@
-# Reverse proxy + Let's Encrypt SSL for the TBK Progression Bridge.
+# Reverse proxy + Let's Encrypt SSL for the TBK Custom Ranks Bridge.
 #
 # Setup:
 #   1. Copy this file to bridge.conf in the same directory.

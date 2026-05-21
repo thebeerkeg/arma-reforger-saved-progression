@@ -1,6 +1,6 @@
-# TBK Progression Bridge
+# TBK Custom Ranks Bridge
 
-A small REST service that lets the **TBK - Saved Progression** Arma Reforger addon persist player stats to either **SQLite** or **PostgreSQL**, and exposes a public web dashboard with live stats and a searchable leaderboard.
+A small REST service that lets the **TBK Custom Ranks** Arma Reforger addon persist player stats to either **SQLite** or **PostgreSQL**, and exposes a public web dashboard with live stats and a searchable leaderboard.
 
 The Reforger game itself cannot speak SQL directly from Enforce Script, so this service sits between the game server and your database. The addon uses Reforger's `RestApi` to POST stat deltas to this bridge over HTTP.
 
@@ -30,7 +30,7 @@ Requires Docker Engine 20.10+ with the Compose v2 plugin. The default stack is t
 
 ```bash
 git clone <repo-url>
-cd TBKSavedProgressionBridge
+cd TBKCustomRanksBridge
 cp config.docker.example.toml config.toml
 # Edit config.toml and set api_key to a long random string.
 docker compose up -d --build
@@ -76,22 +76,22 @@ Prerequisite: Rust toolchain — install via https://rustup.rs.
 
 ```powershell
 git clone <repo-url>
-cd TBKSavedProgressionBridge
+cd TBKCustomRanksBridge
 cargo build --release
 copy config.example.toml config.toml
 # Edit config.toml and set api_key to a long random string.
-.\target\release\tbk-progression-bridge.exe
+.\target\release\tbk-custom-ranks-bridge.exe
 ```
 
 **Linux:**
 
 ```bash
 git clone <repo-url>
-cd TBKSavedProgressionBridge
+cd TBKCustomRanksBridge
 cargo build --release
 cp config.example.toml config.toml
 # Edit config.toml and set api_key to a long random string.
-./target/release/tbk-progression-bridge
+./target/release/tbk-custom-ranks-bridge
 ```
 
 ## Configuration
@@ -111,7 +111,7 @@ cp config.example.toml config.toml
 |---|---|
 | `backend` | Either `"sqlite"` or `"postgres"`. |
 | `sqlite_path` | Path to the SQLite file. Created on first run. Required when `backend = "sqlite"`. |
-| `postgres_url` | libpq-style connection string, e.g. `"postgres://tbk:secret@localhost:5432/tbk_progression"`. Required when `backend = "postgres"`. |
+| `postgres_url` | libpq-style connection string, e.g. `"postgres://tbk:secret@localhost:5432/tbk_custom_ranks"`. Required when `backend = "postgres"`. |
 | `max_connections` | Maximum pooled DB connections. Default `10`. |
 
 ### `[dashboard]` (optional)
@@ -120,8 +120,8 @@ Customizes the public web dashboard at `/`. Omit the whole section, or any indiv
 
 | Key | Default |
 |---|---|
-| `title` | `"TBK Progression"` |
-| `subtitle` | `"Live stats from the Saved Progression bridge"` |
+| `title` | `"TBK Custom Ranks Bridge"` |
+| `subtitle` | `"Live stats from the TBK Custom Ranks Bridge"` |
 
 ## Switching to PostgreSQL
 
@@ -129,9 +129,9 @@ Customizes the public web dashboard at `/`. Omit the whole section, or any indiv
 [database]
 backend = "postgres"
 # Manual build, Postgres on the same host:
-postgres_url = "postgres://tbk:secret@localhost:5432/tbk_progression"
+postgres_url = "postgres://tbk:secret@localhost:5432/tbk_custom_ranks"
 # Docker Compose with --profile postgres (host is the service name):
-# postgres_url = "postgres://tbk:secret@postgres:5432/tbk_progression"
+# postgres_url = "postgres://tbk:secret@postgres:5432/tbk_custom_ranks"
 ```
 
 Restart the bridge. The schema is created automatically on first start.
@@ -176,9 +176,9 @@ Increment bodies accept any of these fields. All are optional, default to `0`, a
 
 Two supported topologies:
 
-**Same machine as the dedicated server (simplest).** Run the bridge on the Reforger host, keep it bound to localhost, and point the addon at `http://127.0.0.1:8787` in `TBK_ProgressionConfig.conf`. With Docker Compose this is the default profile — the published port is `127.0.0.1:8787:8787`, so nothing external reaches the bridge. If you also want a public dashboard, enable `--profile https` (see [HTTPS / external access](#option-a--docker-compose-recommended)); the local addon can keep using the loopback URL even with HTTPS active.
+**Same machine as the dedicated server (simplest).** Run the bridge on the Reforger host, keep it bound to localhost, and point the addon at `http://127.0.0.1:8787` in `TBK_CustomRanksConfig.conf`. With Docker Compose this is the default profile — the published port is `127.0.0.1:8787:8787`, so nothing external reaches the bridge. If you also want a public dashboard, enable `--profile https` (see [HTTPS / external access](#option-a--docker-compose-recommended)); the local addon can keep using the loopback URL even with HTTPS active.
 
-**Separate machine from the dedicated server.** Run the bridge on its own host with `--profile https` enabled and DNS pointed at it. Set the addon's URL to `https://your.domain` in `TBK_ProgressionConfig.conf`. The api_key gates `/player/*` and `/leaderboard`, so HTTPS + a strong key is the only thing standing between the internet and your write endpoints — pick a long random string.
+**Separate machine from the dedicated server.** Run the bridge on its own host with `--profile https` enabled and DNS pointed at it. Set the addon's URL to `https://your.domain` in `TBK_CustomRanksConfig.conf`. The api_key gates `/player/*` and `/leaderboard`, so HTTPS + a strong key is the only thing standing between the internet and your write endpoints — pick a long random string.
 
 In both cases the addon authenticates via the `?api_key=` query-param form (see [Authentication](#authentication)) — Reforger's `RestApi` strips custom headers before they leave the game.
 
@@ -189,7 +189,7 @@ In both cases the addon authenticates via the `?api_key=` query-param form (see 
 ## Development
 
 - `cargo check` — fast type-check.
-- `cargo build --release` — optimized binary at `target/release/tbk-progression-bridge[.exe]`.
+- `cargo build --release` — optimized binary at `target/release/tbk-custom-ranks-bridge[.exe]`.
 - See `.gitignore` for the full list of ignored paths. Notable: build output (`target/`, `Cargo.lock`), local databases (`*.db*`), and anything containing secrets (`config.toml`, `.env`, `nginx/user_conf.d/bridge.conf`).
 
 ## Screenshots

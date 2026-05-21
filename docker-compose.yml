@@ -1,8 +1,8 @@
 services:
   bridge:
     build: .
-    image: tbk-progression-bridge
-    container_name: tbk-progression-bridge
+    image: tbk-custom-ranks-bridge
+    container_name: tbk-custom-ranks-bridge
     restart: unless-stopped
     ports:
       # Bind to localhost on the host. Same posture as the bare-metal
@@ -15,16 +15,16 @@ services:
   postgres:
     image: postgres:16-alpine
     profiles: ["postgres"]
-    container_name: tbk-progression-postgres
+    container_name: tbk-custom-ranks-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-tbk}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
-      POSTGRES_DB: ${POSTGRES_DB:-tbk_progression}
+      POSTGRES_DB: ${POSTGRES_DB:-tbk_custom_ranks}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tbk} -d ${POSTGRES_DB:-tbk_progression}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tbk} -d ${POSTGRES_DB:-tbk_custom_ranks}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -32,7 +32,7 @@ services:
   nginx:
     image: jonasal/nginx-certbot:5
     profiles: ["https"]
-    container_name: tbk-progression-nginx
+    container_name: tbk-custom-ranks-nginx
     restart: unless-stopped
     ports:
       - "80:80"

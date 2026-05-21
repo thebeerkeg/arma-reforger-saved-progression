@@ -71,7 +71,7 @@ async fn main() -> Result<()> {
     let listener = tokio::net::TcpListener::bind(&cfg.server.bind_address)
         .await
         .with_context(|| format!("binding {}", cfg.server.bind_address))?;
-    tracing::info!("TBK Progression Bridge listening on {}", cfg.server.bind_address);
+    tracing::info!("TBK Custom Ranks Bridge listening on {}", cfg.server.bind_address);
     axum::serve(listener, app).await?;
     Ok(())
 }

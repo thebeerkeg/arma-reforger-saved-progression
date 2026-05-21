@@ -1,4 +1,4 @@
-# TBK Progression Bridge — Docker example config
+# TBK Custom Ranks Bridge — Docker example config
 # Copy to config.toml and edit api_key (and POSTGRES_PASSWORD in .env if using postgres).
 
 [server]
@@ -12,17 +12,17 @@ api_key = "CHANGE_ME"
 [database]
 # Default: SQLite, persisted to the `bridge-data` named docker volume mounted at /data.
 backend = "sqlite"
-sqlite_path = "/data/tbk_progression.db"
+sqlite_path = "/data/tbk_custom_ranks.db"
 
 # To use Postgres instead:
 #   1. Comment out the two lines above and uncomment the two below.
 #   2. `cp .env.example .env` and set POSTGRES_PASSWORD (must match the URL below).
 #   3. Bring it up with: docker compose --profile postgres up -d
 # backend = "postgres"
-# postgres_url = "postgres://tbk:CHANGE_ME@postgres:5432/tbk_progression"
+# postgres_url = "postgres://tbk:CHANGE_ME@postgres:5432/tbk_custom_ranks"
 
 max_connections = 10
 
 [dashboard]
-title = "TBK Saved Progression"
-subtitle = "Live stats from the TBK Saved Progression bridge"
+title = "TBK Custom Ranks Bridge"
+subtitle = "Live stats from the TBK Custom Ranks Bridge"
