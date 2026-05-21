@@ -94,6 +94,61 @@ cp config.example.toml config.toml
 ./target/release/tbk-custom-ranks-bridge
 ```
 
+## Upgrade
+
+Upgrades do not require wiping data. Keep your local `config.toml`, `.env`, nginx config, and database storage; only rebuild/restart the bridge from the new source.
+
+### Docker Compose
+
+Docker stores bridge data outside the application image. SQLite uses the `bridge-data` named volume, Postgres uses `postgres-data`, and Let's Encrypt state uses `nginx-secrets`. Do **not** run `docker compose down -v` during an upgrade unless you intentionally want to delete those volumes.
+
+```bash
+cd TBKCustomRanksBridge
+git pull
+
+# Use the same profiles you normally run with.
+docker compose up -d --build
+# or:
+# docker compose --profile postgres up -d --build
+# docker compose --profile https up -d --build
+# docker compose --profile postgres --profile https up -d --build
+
+docker compose logs -f bridge
+```
+
+`docker compose up -d --build` rebuilds the image and recreates the container while keeping named volumes and your local `config.toml` / `.env` files intact. The bridge applies any schema changes automatically at startup.
+
+### Manual Build
+
+For manual installs, preserve your existing `config.toml` and database file. With the default SQLite config, the database is `tbk_custom_ranks.db` in the bridge working directory unless you changed `sqlite_path`.
+
+```bash
+cd TBKCustomRanksBridge
+git pull
+cargo build --release
+```
+
+Then stop the currently running bridge process and start the new binary with the same working directory and config path as before:
+
+```bash
+./target/release/tbk-custom-ranks-bridge
+# or, if you use a custom config location:
+# ./target/release/tbk-custom-ranks-bridge --config /path/to/config.toml
+```
+
+On Windows, stop the currently running bridge process before rebuilding because Windows locks the `.exe` while it is running. Then run:
+
+```powershell
+cd TBKCustomRanksBridge
+git pull
+cargo build --release
+.\target\release\tbk-custom-ranks-bridge.exe
+# or:
+# .\target\release\tbk-custom-ranks-bridge.exe --config C:\path\to\config.toml
+```
+
+Do not replace `config.toml` with `config.example.toml` during an upgrade, and do not delete `tbk_custom_ranks.db` or your configured SQLite/Postgres data directory. The bridge applies any schema changes automatically at startup.
+
 ## Configuration
 
 `config.toml` is TOML with three sections.
