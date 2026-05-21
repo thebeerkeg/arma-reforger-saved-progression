@@ -64,12 +64,13 @@
                 <th class="px-4 py-2 w-12">#</th>
                 <th class="px-4 py-2">Player</th>
                 <th class="px-4 py-2 text-right">Score</th>
-                <th class="px-4 py-2 text-right">Kills</th>
+                <th class="px-4 py-2 text-right">Player Kills</th>
+                <th class="px-4 py-2 text-right">AI Kills</th>
                 <th class="px-4 py-2 text-right">Deaths</th>
               </tr>
             </thead>
             <tbody id="lb-body" class="divide-y divide-tbk-border">
-              <tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Loading…</td></tr>
+              <tr><td colspan="6" class="px-4 py-6 text-center text-slate-500">Loading…</td></tr>
             </tbody>
           </table>
         </div>
@@ -196,7 +197,7 @@
   const TILES = [
     { key: 'total_players',          label: 'Players',     fmt: fmtInt },
     { key: 'total_score',            label: 'Total Score', fmt: fmtInt },
-    { key: 'total_kills',            label: 'Kills',       fmt: fmtInt },
+    { key: 'total_kills',            label: 'Player Kills', fmt: fmtInt },
     { key: 'total_ai_kills',         label: 'AI Kills',    fmt: fmtInt },
     { key: 'total_deaths',           label: 'Deaths',      fmt: fmtInt },
     { key: 'total_objectives',       label: 'Objectives',  fmt: fmtInt },
@@ -245,7 +246,7 @@
       const msg = state.search
         ? `No players match "${escapeHtml(state.search)}".`
         : 'No players yet.';
-      body.innerHTML = `<tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">${msg}</td></tr>`;
+      body.innerHTML = `<tr><td colspan="6" class="px-4 py-6 text-center text-slate-500">${msg}</td></tr>`;
     } else {
       body.innerHTML = rows.map(r => `
         <tr data-uid="${escapeHtml(r.player_uid)}" data-name="${escapeHtml(r.last_known_name)}"
@@ -254,6 +255,7 @@
           <td class="px-4 py-2 text-white">${escapeHtml(r.last_known_name)}</td>
           <td class="px-4 py-2 text-right tabular-nums">${fmtInt(r.total_score)}</td>
           <td class="px-4 py-2 text-right tabular-nums">${fmtInt(r.kills)}</td>
+          <td class="px-4 py-2 text-right tabular-nums">${fmtInt(r.ai_kills)}</td>
           <td class="px-4 py-2 text-right tabular-nums">${fmtInt(r.deaths)}</td>
         </tr>
       `).join('');
@@ -291,7 +293,7 @@
     const rows = [
       ['Player UID',  p.player_uid,                              'font-mono text-xs break-all'],
       ['Total Score', fmtInt(p.total_score),                     'tabular-nums'],
-      ['Kills',       fmtInt(p.kills),                           'tabular-nums'],
+      ['Player Kills', fmtInt(p.kills),                          'tabular-nums'],
       ['AI Kills',    fmtInt(p.ai_kills),                        'tabular-nums'],
       ['Deaths',      fmtInt(p.deaths),                          'tabular-nums'],
       ['Objectives',  fmtInt(p.objectives),                      'tabular-nums'],
