@@ -62,6 +62,7 @@
             <thead class="text-left text-xs uppercase tracking-wider text-slate-400 bg-black/20">
               <tr>
                 <th class="px-4 py-2 w-12">#</th>
+                <th class="px-2 py-2 w-8" aria-label="Status"></th>
                 <th class="px-4 py-2">Player</th>
                 <th class="px-4 py-2 text-right">Score</th>
                 <th class="px-4 py-2 text-right">Player Kills</th>
@@ -70,7 +71,7 @@
               </tr>
             </thead>
             <tbody id="lb-body" class="divide-y divide-tbk-border">
-              <tr><td colspan="6" class="px-4 py-6 text-center text-slate-500">Loading…</td></tr>
+              <tr><td colspan="7" class="px-4 py-6 text-center text-slate-500">Loading…</td></tr>
             </tbody>
           </table>
         </div>
@@ -193,6 +194,7 @@
     String(s).replace(/[&<>"']/g, (c) => ({
       '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
     }[c]));
+  const ONLINE_THRESHOLD_MS = 2 * 60 * 1000;
 
   const TILES = [
     { key: 'total_players',          label: 'Players',     fmt: fmtInt },
@@ -238,6 +240,28 @@
   const PAGE_SIZE = 25;
   const state = { page: 0, search: '', total: 0 };
 
+  function isOnline(lastSeen) {
+    const lastSeenMs = Date.parse(lastSeen);
+    if (!Number.isFinite(lastSeenMs)) return false;
+    const ageMs = Date.now() - lastSeenMs;
+    return ageMs >= -30 * 1000 && ageMs <= ONLINE_THRESHOLD_MS;
+  }
+
+  function statusLabel(lastSeen) {
+    return isOnline(lastSeen) ? 'Online' : 'Offline';
+  }
+
+  function statusDot(lastSeen) {
+    const online = isOnline(lastSeen);
+    const dotCls = online ? 'bg-emerald-400 shadow-[0_0_0_3px_rgba(52,211,153,0.12)]' : 'bg-slate-500';
+    return `
+      <span title="Last seen ${escapeHtml(fmtDate(lastSeen))}"
+            aria-label="${statusLabel(lastSeen)}"
+            class="inline-block h-2.5 w-2.5 shrink-0 rounded-full ${dotCls}">
+      </span>
+    `;
+  }
+
   function renderLeaderboard(rows, total, offset) {
     const body = document.getElementById('lb-body');
     state.total = total;
@@ -246,12 +270,13 @@
       const msg = state.search
         ? `No players match "${escapeHtml(state.search)}".`
         : 'No players yet.';
-      body.innerHTML = `<tr><td colspan="6" class="px-4 py-6 text-center text-slate-500">${msg}</td></tr>`;
+      body.innerHTML = `<tr><td colspan="7" class="px-4 py-6 text-center text-slate-500">${msg}</td></tr>`;
     } else {
       body.innerHTML = rows.map(r => `
         <tr data-uid="${escapeHtml(r.player_uid)}" data-name="${escapeHtml(r.last_known_name)}"
             class="cursor-pointer hover:bg-black/30 transition-colors">
           <td class="px-4 py-2 text-slate-500 tabular-nums">${r.rank}</td>
+          <td class="px-2 py-2 text-center">${statusDot(r.last_seen)}</td>
           <td class="px-4 py-2 text-white">${escapeHtml(r.last_known_name)}</td>
           <td class="px-4 py-2 text-right tabular-nums">${fmtInt(r.total_score)}</td>
           <td class="px-4 py-2 text-right tabular-nums">${fmtInt(r.kills)}</td>
@@ -290,8 +315,15 @@
   }
 
   function renderPlayer(p) {
+    const playerStatus = `
+      <span class="inline-flex items-center gap-2">
+        ${statusDot(p.last_seen)}
+        <span>${statusLabel(p.last_seen)}</span>
+      </span>
+    `;
     const rows = [
       ['Player UID',  p.player_uid,                              'font-mono text-xs break-all'],
+      ['Status',      playerStatus,                              'text-white', true],
       ['Total Score', fmtInt(p.total_score),                     'tabular-nums'],
       ['Player Kills', fmtInt(p.kills),                          'tabular-nums'],
       ['AI Kills',    fmtInt(p.ai_kills),                        'tabular-nums'],
@@ -303,10 +335,10 @@
     ];
     modalBody.innerHTML = `
       <dl class="divide-y divide-tbk-border">
-        ${rows.map(([k, v, cls]) => `
+        ${rows.map(([k, v, cls, isHtml]) => `
           <div class="grid grid-cols-3 gap-3 py-2">
             <dt class="text-slate-400">${k}</dt>
-            <dd class="col-span-2 text-white ${cls}">${escapeHtml(v)}</dd>
+            <dd class="col-span-2 text-white ${cls}">${isHtml ? v : escapeHtml(v)}</dd>
           </div>
         `).join('')}
       </dl>

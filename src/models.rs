@@ -57,6 +57,7 @@ pub struct LeaderboardEntry {
     pub rank: i64,
     pub player_uid: String,
     pub last_known_name: String,
+    pub last_seen: DateTime<Utc>,
     pub total_score: i64,
     pub kills: i64,
     pub ai_kills: i64,

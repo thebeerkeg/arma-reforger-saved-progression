@@ -398,7 +398,7 @@ impl Store for SqliteStore {
 
     async fn leaderboard(&self, limit: i64) -> BridgeResult<Vec<LeaderboardEntry>> {
         let rows = sqlx::query(
-            "SELECT player_uid, last_known_name, total_score, kills, ai_kills, deaths
+            "SELECT player_uid, last_known_name, last_seen, total_score, kills, ai_kills, deaths
              FROM players ORDER BY total_score DESC LIMIT ?",
         )
         .bind(limit)
@@ -410,6 +410,7 @@ impl Store for SqliteStore {
                 rank: (i as i64) + 1,
                 player_uid: r.try_get("player_uid")?,
                 last_known_name: r.try_get("last_known_name")?,
+                last_seen: r.try_get("last_seen")?,
                 total_score: r.try_get("total_score")?,
                 kills: r.try_get("kills")?,
                 ai_kills: r.try_get("ai_kills")?,
@@ -455,9 +456,9 @@ impl Store for SqliteStore {
         let pattern = build_like_pattern(search.unwrap_or(""));
         let rows = sqlx::query(
             r#"
-            SELECT player_uid, last_known_name, total_score, kills, ai_kills, deaths, rank
+            SELECT player_uid, last_known_name, last_seen, total_score, kills, ai_kills, deaths, rank
             FROM (
-                SELECT player_uid, last_known_name, total_score, kills, ai_kills, deaths,
+                SELECT player_uid, last_known_name, last_seen, total_score, kills, ai_kills, deaths,
                        ROW_NUMBER() OVER (ORDER BY total_score DESC, player_uid) AS rank
                 FROM players
             )
@@ -485,6 +486,7 @@ impl Store for SqliteStore {
                 rank: r.try_get("rank")?,
                 player_uid: r.try_get("player_uid")?,
                 last_known_name: r.try_get("last_known_name")?,
+                last_seen: r.try_get("last_seen")?,
                 total_score: r.try_get("total_score")?,
                 kills: r.try_get("kills")?,
                 ai_kills: r.try_get("ai_kills")?,
@@ -913,7 +915,7 @@ impl Store for PostgresStore {
 
     async fn leaderboard(&self, limit: i64) -> BridgeResult<Vec<LeaderboardEntry>> {
         let rows = sqlx::query(
-            "SELECT player_uid, last_known_name, total_score, kills, ai_kills, deaths
+            "SELECT player_uid, last_known_name, last_seen, total_score, kills, ai_kills, deaths
              FROM players ORDER BY total_score DESC LIMIT $1",
         )
         .bind(limit)
@@ -925,6 +927,7 @@ impl Store for PostgresStore {
                 rank: (i as i64) + 1,
                 player_uid: r.try_get("player_uid")?,
                 last_known_name: r.try_get("last_known_name")?,
+                last_seen: r.try_get("last_seen")?,
                 total_score: r.try_get("total_score")?,
                 kills: r.try_get("kills")?,
                 ai_kills: r.try_get("ai_kills")?,
@@ -969,9 +972,9 @@ impl Store for PostgresStore {
         let pattern = build_like_pattern(search.unwrap_or(""));
         let rows = sqlx::query(
             r#"
-            SELECT player_uid, last_known_name, total_score, kills, ai_kills, deaths, rank
+            SELECT player_uid, last_known_name, last_seen, total_score, kills, ai_kills, deaths, rank
             FROM (
-                SELECT player_uid, last_known_name, total_score, kills, ai_kills, deaths,
+                SELECT player_uid, last_known_name, last_seen, total_score, kills, ai_kills, deaths,
                        ROW_NUMBER() OVER (ORDER BY total_score DESC, player_uid) AS rank
                 FROM players
             ) p
@@ -999,6 +1002,7 @@ impl Store for PostgresStore {
                 rank: r.try_get("rank")?,
                 player_uid: r.try_get("player_uid")?,
                 last_known_name: r.try_get("last_known_name")?,
+                last_seen: r.try_get("last_seen")?,
                 total_score: r.try_get("total_score")?,
                 kills: r.try_get("kills")?,
                 ai_kills: r.try_get("ai_kills")?,
