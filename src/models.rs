@@ -67,6 +67,7 @@ pub struct LeaderboardEntry {
 #[derive(Debug, Serialize)]
 pub struct AggregateStats {
     pub total_players: i64,
+    pub total_online_players: i64,
     pub total_score: i64,
     pub total_kills: i64,
     pub total_ai_kills: i64,

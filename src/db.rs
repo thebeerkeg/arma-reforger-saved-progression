@@ -421,9 +421,14 @@ impl Store for SqliteStore {
     }
 
     async fn aggregate_stats(&self) -> BridgeResult<AggregateStats> {
+        let now = chrono::Utc::now();
+        let online_since = now - chrono::Duration::minutes(2);
+        let online_until = now + chrono::Duration::seconds(30);
         let row = sqlx::query(
             "SELECT
                 COUNT(*)                                AS total_players,
+                COUNT(CASE WHEN last_seen >= ? AND last_seen <= ? THEN 1 END)
+                                                        AS total_online_players,
                 COALESCE(SUM(total_score), 0)           AS total_score,
                 COALESCE(SUM(kills), 0)                 AS total_kills,
                 COALESCE(SUM(ai_kills), 0)              AS total_ai_kills,
@@ -432,10 +437,13 @@ impl Store for SqliteStore {
                 COALESCE(SUM(playtime_seconds), 0)      AS total_playtime_seconds
              FROM players",
         )
+        .bind(online_since)
+        .bind(online_until)
         .fetch_one(&self.pool)
         .await?;
         Ok(AggregateStats {
             total_players: row.try_get("total_players")?,
+            total_online_players: row.try_get("total_online_players")?,
             total_score: row.try_get("total_score")?,
             total_kills: row.try_get("total_kills")?,
             total_ai_kills: row.try_get("total_ai_kills")?,
@@ -939,9 +947,14 @@ impl Store for PostgresStore {
 
     async fn aggregate_stats(&self) -> BridgeResult<AggregateStats> {
         // Postgres SUM(BIGINT) returns NUMERIC; cast back to BIGINT so we can read it as i64.
+        let now = chrono::Utc::now();
+        let online_since = now - chrono::Duration::minutes(2);
+        let online_until = now + chrono::Duration::seconds(30);
         let row = sqlx::query(
             "SELECT
                 COUNT(*)                                          AS total_players,
+                COUNT(*) FILTER (WHERE last_seen >= $1 AND last_seen <= $2)
+                                                                  AS total_online_players,
                 COALESCE(SUM(total_score), 0)::BIGINT             AS total_score,
                 COALESCE(SUM(kills), 0)::BIGINT                   AS total_kills,
                 COALESCE(SUM(ai_kills), 0)::BIGINT                AS total_ai_kills,
@@ -950,10 +963,13 @@ impl Store for PostgresStore {
                 COALESCE(SUM(playtime_seconds), 0)::BIGINT        AS total_playtime_seconds
              FROM players",
         )
+        .bind(online_since)
+        .bind(online_until)
         .fetch_one(&self.pool)
         .await?;
         Ok(AggregateStats {
             total_players: row.try_get("total_players")?,
+            total_online_players: row.try_get("total_online_players")?,
             total_score: row.try_get("total_score")?,
             total_kills: row.try_get("total_kills")?,
             total_ai_kills: row.try_get("total_ai_kills")?,
