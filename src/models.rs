@@ -169,13 +169,17 @@ pub struct FinalizeMatchPlayer {
 pub struct FinalizeMatchRequest {
     pub id: String,
     pub scenario: String,
-    /// Falls back to (now() - duration_unknown) on the bridge when absent.
-    /// Addon should send the wall-clock match start.
+    /// Optional absolute UTC start. When absent, the bridge derives it from
+    /// duration_seconds or, for older addon payloads, roster playtime.
     #[serde(default)]
     pub start_time: Option<DateTime<Utc>>,
     /// Falls back to server's now() when absent.
     #[serde(default)]
     pub end_time: Option<DateTime<Utc>>,
+    /// Relative duration from the addon. Used to derive start_time when the
+    /// addon cannot send a UTC wall-clock start.
+    #[serde(default)]
+    pub duration_seconds: Option<i64>,
     #[serde(default)]
     pub winning_faction: Option<String>,
     #[serde(default)]

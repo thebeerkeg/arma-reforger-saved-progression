@@ -64,6 +64,131 @@ fn build_like_pattern(s: &str) -> String {
     out
 }
 
+fn resolve_match_times(
+    req: &FinalizeMatchRequest,
+    now: chrono::DateTime<chrono::Utc>,
+) -> (chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>) {
+    let end_time = req.end_time.unwrap_or(now);
+    let start_time = req.start_time.unwrap_or_else(|| {
+        let inferred_duration_seconds = req.duration_seconds.unwrap_or_else(|| {
+            req.players
+                .iter()
+                .map(|p| p.playtime_seconds.max(0))
+                .max()
+                .unwrap_or(0)
+        });
+        let inferred_duration_seconds = inferred_duration_seconds.max(0);
+        let inferred_duration = chrono::TimeDelta::try_seconds(inferred_duration_seconds)
+            .unwrap_or_else(chrono::TimeDelta::zero);
+        end_time
+            .checked_sub_signed(inferred_duration)
+            .unwrap_or(end_time)
+    });
+
+    (start_time, end_time)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::FinalizeMatchPlayer;
+    use chrono::TimeZone;
+
+    fn finalize_req(players: Vec<FinalizeMatchPlayer>) -> FinalizeMatchRequest {
+        FinalizeMatchRequest {
+            id: "match-1".to_string(),
+            scenario: "Conflict".to_string(),
+            start_time: None,
+            end_time: None,
+            duration_seconds: None,
+            winning_faction: None,
+            end_reason: None,
+            players,
+        }
+    }
+
+    fn match_player(playtime_seconds: i64) -> FinalizeMatchPlayer {
+        FinalizeMatchPlayer {
+            player_uid: "uid".to_string(),
+            last_known_name: "Player".to_string(),
+            faction: "US".to_string(),
+            total_score: 0,
+            kills: 0,
+            ai_kills: 0,
+            deaths: 0,
+            objectives: 0,
+            playtime_seconds,
+        }
+    }
+
+    #[test]
+    fn missing_start_time_prefers_addon_duration() {
+        let now = chrono::Utc.with_ymd_and_hms(2026, 6, 6, 10, 0, 0).unwrap();
+        let mut req = finalize_req(vec![match_player(420)]);
+        req.duration_seconds = Some(1200);
+
+        let (start_time, end_time) = resolve_match_times(&req, now);
+
+        assert_eq!(end_time, now);
+        assert_eq!(
+            start_time,
+            now - chrono::TimeDelta::try_seconds(1200).unwrap()
+        );
+    }
+
+    #[test]
+    fn missing_start_time_is_inferred_from_longest_roster_playtime() {
+        let now = chrono::Utc.with_ymd_and_hms(2026, 6, 6, 10, 0, 0).unwrap();
+        let req = finalize_req(vec![match_player(60), match_player(420)]);
+
+        let (start_time, end_time) = resolve_match_times(&req, now);
+
+        assert_eq!(end_time, now);
+        assert_eq!(
+            start_time,
+            now - chrono::TimeDelta::try_seconds(420).unwrap()
+        );
+    }
+
+    #[test]
+    fn explicit_match_times_are_preserved() {
+        let now = chrono::Utc.with_ymd_and_hms(2026, 6, 6, 10, 0, 0).unwrap();
+        let start = chrono::Utc.with_ymd_and_hms(2026, 6, 6, 8, 0, 0).unwrap();
+        let end = chrono::Utc.with_ymd_and_hms(2026, 6, 6, 9, 30, 0).unwrap();
+        let mut req = finalize_req(vec![match_player(999)]);
+        req.start_time = Some(start);
+        req.end_time = Some(end);
+
+        let (start_time, end_time) = resolve_match_times(&req, now);
+
+        assert_eq!(start_time, start);
+        assert_eq!(end_time, end);
+    }
+
+    #[test]
+    fn negative_duration_does_not_infer_a_future_start_time() {
+        let now = chrono::Utc.with_ymd_and_hms(2026, 6, 6, 10, 0, 0).unwrap();
+        let mut req = finalize_req(vec![match_player(420)]);
+        req.duration_seconds = Some(-30);
+
+        let (start_time, end_time) = resolve_match_times(&req, now);
+
+        assert_eq!(start_time, now);
+        assert_eq!(end_time, now);
+    }
+
+    #[test]
+    fn negative_playtime_does_not_infer_a_future_start_time() {
+        let now = chrono::Utc.with_ymd_and_hms(2026, 6, 6, 10, 0, 0).unwrap();
+        let req = finalize_req(vec![match_player(-30)]);
+
+        let (start_time, end_time) = resolve_match_times(&req, now);
+
+        assert_eq!(start_time, now);
+        assert_eq!(end_time, now);
+    }
+}
+
 pub enum AnyStore {
     Sqlite(SqliteStore),
     Postgres(PostgresStore),
@@ -506,8 +631,7 @@ impl Store for SqliteStore {
 
     async fn finalize_match(&self, req: &FinalizeMatchRequest) -> BridgeResult<Match> {
         let now = chrono::Utc::now();
-        let start_time = req.start_time.unwrap_or(now);
-        let end_time = req.end_time.unwrap_or(now);
+        let (start_time, end_time) = resolve_match_times(req, now);
 
         let mut tx = self.pool.begin().await?;
 
@@ -1030,8 +1154,7 @@ impl Store for PostgresStore {
 
     async fn finalize_match(&self, req: &FinalizeMatchRequest) -> BridgeResult<Match> {
         let now = chrono::Utc::now();
-        let start_time = req.start_time.unwrap_or(now);
-        let end_time = req.end_time.unwrap_or(now);
+        let (start_time, end_time) = resolve_match_times(req, now);
 
         let mut tx = self.pool.begin().await?;
 
